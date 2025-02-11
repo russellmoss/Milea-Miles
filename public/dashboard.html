@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard</title>
+
+    <link rel="stylesheet" href="/css/dashboard.css">
+</head>
+<body>
+    <div class="container">
+      <div class='col-left'>
+        <h2 id="welcomeText">Welcome!</h2>
+        <h1>Your Milea Miles: <br /><span id="loyaltyPoints">---</span></h1>
+        <h2>Send a Free Tasting Referral</h2>
+        <form id="referralForm" style="font-size:0;">
+            <input type="text" id="refFirstName" placeholder="First Name" required style="width: 48.5%; box-sizing: border-box; margin-left: 0;">
+            <input type="text" id="refLastName" placeholder="Last Name" required style="width: 48.5%; margin-left: 3%; box-sizing: border-box; margin-right: 0;">
+            <input type="email" id="refEmail" placeholder="Email" required>
+            <button type="submit">Send Referral</button>
+        </form>
+        <p id="referralStatus"></p>
+        <br>
+        <h2>Your Referrals</h2>
+        <p class="customer-list-label"><span>Email</span><span>Redeemed</span></p>
+        <ul id="customerList"></ul>
+      </div>
+      <div class="col-right">
+        <div class="the-instagram">
+          <p>Enter your instagram profile below for future point opportunities</p>
+          <p class="filled">If you need to change this please contact us in the contact form.</p>
+          <form id="instagramForm">
+            <label>
+              <!--<span>Instagram Profile:</span>-->
+              <input type="text" id="instagramProfile" placeholder="Instagram Profile">
+            </label>
+            <input type="submit" value="Submit">
+          </form>
+        </div>
+        <h2>Contact Us</h2>
+        <form id="contactForm" class="redemption-questions">
+          <textarea id="question"></textarea>
+          <button type="submit">Submit</button>
+        </form>
+      </div>
+        <button id="logoutButton" style="background-color:#ff0000; width: 50%; margin: 40px auto 20px;">Log Out</button>
+    </div>
+    <script type="text/javascript" src="/js/dashboard.js"></script>
+</body>
+</html>

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Create Account</title>
+  <style>
+    body {background-color: #d8d1ae; font-family: 'Arial', sans-serif; margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; height: 100vh; }
+    .container {text-align: center; padding: 20px; border: 2px solid #715100; border-radius: 10px; box-shadow: 5px 5px 15px rgba(0, 0, 0, 0.2); background-color: #fff; width: 400px; }
+    h1 {color: #715100; margin-bottom: 20px; }
+    input[type="text"], input[type="email"], input[type="password"] {width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 5px; box-sizing:border-box; }
+    .password-container {position: relative; }
+    .toggle-password {position: absolute; top: 50%; right: 10px; transform: translateY(-50%); cursor: pointer; }
+    button {background-color: #715100; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; transition: all 0.2s cubic-bezier(0.455, 0.03, 0.515, 0.955);}
+    button:hover {background-color: #8a6a00; }
+    a {color: #333; transition: all 0.2s cubic-bezier(0.455, 0.03, 0.515, 0.955); }
+    a:hover {color: #666666;text-decoration:none;}
+    label {font-size: 14px; display: block; margin-top: 10px; }
+    .required {color: red; }
+    #message {margin-top: 20px; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Create Account</h1>
+    <form id="createAccountForm">
+      <input type="text" id="firstName" placeholder="First Name *" required>
+      <input type="text" id="lastName" placeholder="Last Name *" required>
+      <input type="email" id="email" placeholder="Email Address *" required>
+      <div class="password-container">
+        <input type="password" id="password" placeholder="Password *" required>
+        <span class="toggle-password" onclick="togglePasswordVisibility('password')">👁️</span>
+      </div>
+      <div class="password-container">
+        <input type="password" id="confirmPassword" placeholder="Confirm Password *" required>
+        <span class="toggle-password" onclick="togglePasswordVisibility('confirmPassword')">👁️</span>
+      </div>
+      <label>
+        <input type="checkbox" id="subscribe" required> Subscribe to Mailing List <span class="required">*</span>
+      </label>
+      <button type="submit">Submit</button>
+    </form>
+    <div id="message"></div>
+  </div>
+
+  <script type="text/javascript" src="/js/create-account.js"></script>
+</body>
+</html>
