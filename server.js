@@ -30,7 +30,7 @@ app.use( helmet.contentSecurityPolicy({
       // Allow images from self, data URIs, and i.imgur.com:
       imgSrc: ["'self'", "data:", "https://i.imgur.com"],
       // You can add other directives as needed:
-      frameAncestors: ["'self'", "https://mileaestatevineyard.com"]
+      frameAncestors: ["'self'", "https://mileaestatevineyard.com"],
       styleSrc: ["'self'", "'unsafe-inline'"],
       connectSrc: ["'self'"],
       fontSrc: ["'self'"],
