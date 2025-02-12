@@ -202,6 +202,15 @@ async function handleReferralSubmit(event, ambassadorName) {
   const firstName = document.getElementById('refFirstName').value.trim();
   const lastName = document.getElementById('refLastName').value.trim();
   const email = document.getElementById('refEmail').value.trim();
+  const userEmail = localStorage.getItem('userEmail');
+  const safeEmail = userEmail.replace(/[^a-zA-Z0-9]/g, '_');
+
+  const loyaltyCookieKey = `loyaltyPoints_${safeEmail}`;
+  const referralsCookieKey = `referrals_${safeEmail}`;
+
+  document.cookie = loyaltyCookieKey + "=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+  document.cookie = referralsCookieKey + "=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+
 
   if (!firstName || !lastName || !email) {
     document.getElementById('referralStatus').innerText = 'Error: All fields are required.';
