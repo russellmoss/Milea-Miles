@@ -41,6 +41,8 @@ a:hover {color: #666666;text-decoration:none;}
 .redemption-questions {display: block; width: 100%; margin-bottom: 20px; }
 .redemption-questions textarea {width: 100%;display: block;height: 155px;}
 
+#refreshBtn {display: block; position: fixed; bottom: 7px; right: 7px; width: 170px; margin: 0; }
+
 .success {color: #00ff00; }
 .error {color: #ff0000; }
 

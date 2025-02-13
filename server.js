@@ -76,7 +76,7 @@ const JWT_SECRET = process.env.JWT_SECRET || "your_jwt_secret";
 
 // Generate a JWT token (valid for 1 hour)
 function generateToken(payload) {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: '1h' });
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: '3h' });
 }
 
 // ---------------- Authentication Middleware ----------------
@@ -394,11 +394,12 @@ app.get('/api/referrals', async (req, res) => {
     }
     const referralEmails = referralsStr.split(',').filter(email => email.trim() !== '');
 
-    const referralsData = await Promise.all(referralEmails.map(async (refEmail) => {
+    const referralsData = await Promise.all(referralEmails.map(async (refEmail, index) => {
       let metaRedeemed = false;
       let promotionRedeemed = false;
       let referredCustomer = null;
       // Fetch referred customer data.
+      await delay(index * 250);
       try {
         const refCustomerResponse = await axios.get(`${C7_API_BASE}/customer`, {
           params: { q: refEmail },
@@ -466,6 +467,9 @@ app.get('/api/referrals', async (req, res) => {
   }
 });
 
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 // --- Update Loyalty (protected) ---
 app.post('/api/update-loyalty', async (req, res) => {

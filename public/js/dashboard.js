@@ -1,6 +1,31 @@
+const userEmail = localStorage.getItem('userEmail');
+const safeEmail = userEmail.replace(/[^a-zA-Z0-9]/g, '_');
+const loyaltyCookieKey = `loyaltyPoints_${safeEmail}`;
+const referralsCookieKey = `referrals_${safeEmail}`;
+
+function isTokenExpired(token) {
+    if (!token) return true;
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    return Date.now() >= payload.exp * 1000;
+}
+
+function checkAuth() {
+    const token = localStorage.getItem("token");
+    if (!token || isTokenExpired(token)) {
+        console.warn("Token expired or missing. Redirecting to login...");
+        localStorage.removeItem("token");
+        window.location.href = "index.html";
+    }
+}
+
+checkAuth();
+
+
 document.addEventListener("DOMContentLoaded", function () {
 
  var redeemedCount = 0;
+
+var gotSome = false;
   // Retrieve stored token; if missing, redirect to login.
   const token = localStorage.getItem('token');
   if (!token) {
@@ -45,7 +70,7 @@ document.addEventListener("DOMContentLoaded", function () {
     .then(data => {
       const customerList = document.getElementById('customerList');
 
-      data.referrals.forEach(referral => {
+      data.referrals.reverse().forEach(referral => {
         const [email, metaRedeemed, promotionRedeemed] = referral;
         const li = document.createElement('li');
 
@@ -54,7 +79,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
         customerList.appendChild(li);
       });
-
       // Now, check for referrals that qualify for loyalty points.
  const redeemedSpans = document.querySelectorAll(".redeemed");
 redeemedSpans.forEach((span, index) => { redeemedCount++;
@@ -77,6 +101,9 @@ redeemedSpans.forEach((span, index) => { redeemedCount++;
             // After backend confirms update, change the UI state.
             span.setAttribute("data-meta-redeemed", "true");
             // Refresh displayed loyalty points.
+            gotSome = true;
+            document.cookie = loyaltyCookieKey + "=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+            document.cookie = referralsCookieKey + "=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
             updateLoyaltyPoints();
           } else {
             console.error(`Failed to update loyalty points: ${result.error}`);
@@ -92,7 +119,12 @@ redeemedSpans.forEach((span, index) => { redeemedCount++;
       console.error('Error fetching referrals:', error);
     });
 
-  setTimeout( updateLoyaltyPoints, redeemedCount * 255);
+  setTimeout( function () {
+    if ( gotSome ) document.cookie = loyaltyCookieKey + "=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+    //document.cookie = referralsCookieKey + "=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+    updateLoyaltyPoints();
+  }, redeemedCount * 400);
+
 
   // Handle Instagram form submission.
   const instagramForm = document.getElementById('instagramForm');
@@ -195,6 +227,7 @@ function updateLoyaltyPoints() {
     .catch(error => console.error('Error fetching loyalty points:', error));
 }
 
+
 // Handle referral submission.
 async function handleReferralSubmit(event, ambassadorName) {
   event.preventDefault();
@@ -202,11 +235,6 @@ async function handleReferralSubmit(event, ambassadorName) {
   const firstName = document.getElementById('refFirstName').value.trim();
   const lastName = document.getElementById('refLastName').value.trim();
   const email = document.getElementById('refEmail').value.trim();
-  const userEmail = localStorage.getItem('userEmail');
-  const safeEmail = userEmail.replace(/[^a-zA-Z0-9]/g, '_');
-
-  const loyaltyCookieKey = `loyaltyPoints_${safeEmail}`;
-  const referralsCookieKey = `referrals_${safeEmail}`;
 
   document.cookie = loyaltyCookieKey + "=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
   document.cookie = referralsCookieKey + "=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
@@ -242,6 +270,7 @@ async function handleReferralSubmit(event, ambassadorName) {
     if (response.ok) {
       document.getElementById('referralStatus').innerText = 'Referral sent successfully!';
       document.getElementById('referralStatus').classList.add('success');
+      setTimeout(function() {location.reload(); }, 3000);
     } else {
       document.getElementById('referralStatus').innerText = `Error: ${data.message || 'An error occurred.'}`;
       document.getElementById('referralStatus').classList.add('error');
@@ -263,6 +292,15 @@ document.addEventListener("DOMContentLoaded", function () {
   if (logoutButton) {
     logoutButton.addEventListener('click', logout);
   }
+});
+window.addEventListener('load', function() {
+  setTimeout(function() {
+    document.getElementById('refreshBtn').style.display = 'block';
+  }, 3500);
+});
+document.getElementById('refreshBtn').addEventListener('click', function() {
+  document.cookie = loyaltyCookieKey + "=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+  location.reload();
 });
 
 
