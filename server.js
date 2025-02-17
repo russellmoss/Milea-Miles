@@ -54,6 +54,8 @@ app.use(cors(corsOptions));
 
 // Parse incoming JSON bodies.
 app.use(express.json());
+app.set('trust proxy', 1);
+
 
 // Serve static files (including index.html and create-account.html).
 app.use(express.static(path.join(__dirname, 'public')));
