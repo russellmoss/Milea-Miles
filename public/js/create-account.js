@@ -50,7 +50,7 @@ document.addEventListener("DOMContentLoaded", () => {
       };
 const apiBase = window.location.hostname === 'localhost'
   ? 'http://localhost:8080'
-  : 'https://your-live-api.com';  // Replace with actual live API URL
+  : '';  // Replace with actual live API URL
 
 
       try {
