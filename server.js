@@ -40,9 +40,14 @@ app.use( helmet.contentSecurityPolicy({
   })
 );
 
+const allowedOrigins = process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS.split(",").map(origin => origin.trim())
+  : 'http://localhost:3000';
+
+
 // Enable CORS only for allowed origins.
 const corsOptions = {
-  origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+  origin: allowedOrigins.length === 1 ? allowedOrigins[0] : allowedOrigins, // Handle single & multiple origins
   optionsSuccessStatus: 200,
 };
 app.use(cors(corsOptions));
