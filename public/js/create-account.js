@@ -52,12 +52,15 @@
           body: JSON.stringify(payload),
         });
 
+
         if (response.ok) {
+          const responseData = await response.json(); // Parse the response
+          console.log("✅ Account Created:", responseData); // Log the full response
           messageElem.innerText = 'Account created successfully! Redirecting to login page...';
           messageElem.style.color = 'green';
-          setTimeout(() => {
+          /*setTimeout(() => {
             window.location.href = './index.html';
-          }, 3000);
+          }, 3000);*/
         } else {
           const errorData = await response.json();
           messageElem.innerText = `Error: ${errorData.message}`;
