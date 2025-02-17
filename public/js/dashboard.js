@@ -294,6 +294,9 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 });
 window.addEventListener('load', function() {
+  const height = document.body.scrollHeight;
+  window.parent.postMessage({ iframeHeight: height }, "*");
+
   setTimeout(function() {
     document.getElementById('refreshBtn').style.display = 'block';
   }, 3500);

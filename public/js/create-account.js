@@ -27,11 +27,11 @@
       // we must include a valid JWT token in the request header.
       // For example, the token can be stored in localStorage after a prior login.
       const token = localStorage.getItem('token');
-      if (!token) {
+      /*if (!token) {
         messageElem.innerText = 'You are not authorized to create an account. Please log in first or use a valid invitation token.';
         messageElem.style.color = 'red';
         return;
-      }
+      }*/
 
       const payload = {
         firstName,
@@ -43,11 +43,11 @@
       };
 
       try {
-        const response = await fetch('http://localhost:3001/create-account', {
+        const response = await fetch('/create-account', {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + token
+            ...{'Content-Type': 'application/json'},
+            ...{'Authorization': 'Bearer ' + token}
           },
           body: JSON.stringify(payload),
         });
