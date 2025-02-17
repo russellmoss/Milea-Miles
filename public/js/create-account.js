@@ -4,6 +4,13 @@
       field.type = field.type === 'password' ? 'text' : 'password';
     }
 
+// Attach event listener instead of inline `onclick`
+document.addEventListener("DOMContentLoaded", () => {
+    document.getElementById("togglePassword").addEventListener("click", () => togglePasswordVisibility("password"));
+    document.getElementById("toggleConfirmPassword").addEventListener("click", () => togglePasswordVisibility("confirmPassword"));
+});
+
+
     document.getElementById('createAccountForm').addEventListener('submit', async (e) => {
       e.preventDefault();
 
@@ -43,11 +50,10 @@
       };
 
       try {
-        const response = await fetch('/create-account', {
+        const response = await fetch('http://localhost:8080/create-account', {
           method: 'POST',
           headers: {
-            ...{'Content-Type': 'application/json'},
-            ...{'Authorization': 'Bearer ' + token}
+            ...{'Content-Type': 'application/json'}
           },
           body: JSON.stringify(payload),
         });

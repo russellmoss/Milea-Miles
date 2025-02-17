@@ -121,7 +121,7 @@ function checkAuth(req, res, next) {
 // ---------------- Global Protection ----------------
 
 // Define public paths (only login and the root static assets are public).
-const publicPaths = ['/auth/login', '/'];
+const publicPaths = ['/auth/login', '/', '/create-account', '/create-account.html'];
 
 // All endpoints not matching the public paths will be protected.
 app.use((req, res, next) => {
