@@ -48,13 +48,13 @@ document.addEventListener("DOMContentLoaded", () => {
         emailMarketingStatus: subscribe ? "Subscribed" : "Unsubscribed",
         metaData: { ambassador: "ambassador" }
       };
-const apiBase = window.location.hostname === 'localhost'
-  ? 'http://localhost:8080'
-  : '';  // Replace with actual live API URL
 
+
+
+      const apiBase = window.location.origin;
 
       try {
-        const response = await fetch('${apiBase}/create-account', {
+        const response = await fetch(`${apiBase}/create-account`, {
           method: 'POST',
           headers: {
             ...{'Content-Type': 'application/json'}
