@@ -190,12 +190,14 @@ app.post('/auth/login', authLimiter, async (req, res) => {
 app.post('/create-account', authLimiter, async (req, res) => {
   const { firstName, lastName, email, password, emailMarketingStatus, metaData } = req.body;
   if (!firstName || !lastName || !email || !password) {
+    console.warn("⚠️ Missing required fields in create-account request:", req.body);
     return res.status(400).json({ message: 'All fields are required.' });
   }
 
   try {
     const basicAuth = `Basic ${Buffer.from(`${APP_ID}:${SECRET_KEY}`).toString('base64')}`;
 
+    console.log("🔍 Checking if customer already exists:", email);
     // Check if customer already exists.
     const searchResponse = await axios.get(`${C7_API_BASE}/customer`, {
       params: { q: email },
@@ -205,13 +207,19 @@ app.post('/create-account', authLimiter, async (req, res) => {
         Tenant: TENANT_ID,
       },
     });
+
     const existingCustomer = searchResponse.data.customers?.[0];
     if (existingCustomer) {
+      console.warn("⚠️ Customer already exists:", existingCustomer);
       return res.status(409).json({
         message: 'Customer already exists.',
         customer: existingCustomer,
       });
     }
+
+    console.log("📝 Creating new customer profile:", {
+      firstName, lastName, email, emailMarketingStatus, metaData
+    });
 
     // Create new customer profile.
     const createResponse = await axios.post(`${C7_API_BASE}/customer`, {
@@ -229,18 +237,20 @@ app.post('/create-account', authLimiter, async (req, res) => {
     });
 
     const newCustomer = createResponse.data;
+    console.log("✅ Customer created successfully:", newCustomer);
     return res.status(201).json({
       message: 'Account created successfully.',
       customer: newCustomer,
     });
   } catch (error) {
-    console.error('Error creating account:', error.response?.data || error.message);
+    console.error("❌ Error creating account in Commerce7:", error.response?.data || error.message);
     return res.status(error.response?.status || 500).json({
       message: 'Error creating account.',
       error: error.response?.data || error.message,
     });
   }
 });
+
 
 // --- Referral Tasting (protected) ---
 app.post('/referral', async (req, res) => {
