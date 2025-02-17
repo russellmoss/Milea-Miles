@@ -187,71 +187,99 @@ app.post('/auth/login', authLimiter, async (req, res) => {
   }
 });
 
+const formatPhoneNumber = (phone) => {
+    if (!phone) return null;
+
+    // Remove all non-numeric characters
+    const digits = phone.replace(/\D/g, "");
+
+    // Ensure it's a 10-digit US number, then format as +1XXXXXXXXXX
+    if (digits.length === 10) {
+        return `+1${digits}`;
+    } else {
+        console.warn("⚠️ Invalid phone number format. Expected 10-digit US number:", phone);
+        return null; // Return null for invalid numbers
+    }
+};
+
 // --- Create Account Endpoint (protected) ---
-// Even though the create-account page is public, this endpoint is locked down.
 app.post('/create-account', authLimiter, async (req, res) => {
-  const { firstName, lastName, email, password, emailMarketingStatus, metaData } = req.body;
-  if (!firstName || !lastName || !email || !password) {
-    console.warn("⚠️ Missing required fields in create-account request:", req.body);
-    return res.status(400).json({ message: 'All fields are required.' });
-  }
+    const { firstName, lastName, email, password, phone, emailMarketingStatus, metaData } = req.body;
 
-  try {
-    const basicAuth = `Basic ${Buffer.from(`${APP_ID}:${SECRET_KEY}`).toString('base64')}`;
-
-    console.log("🔍 Checking if customer already exists:", email);
-    // Check if customer already exists.
-    const searchResponse = await axios.get(`${C7_API_BASE}/customer`, {
-      params: { q: email },
-      headers: {
-        Authorization: basicAuth,
-        'Content-Type': 'application/json',
-        Tenant: TENANT_ID,
-      },
-    });
-
-    const existingCustomer = searchResponse.data.customers?.[0];
-    if (existingCustomer) {
-      console.warn("⚠️ Customer already exists:", existingCustomer);
-      return res.status(409).json({
-        message: 'Customer already exists.',
-        customer: existingCustomer,
-      });
+    if (!firstName || !lastName || !email || !password) {
+        console.warn("⚠️ Missing required fields in create-account request:", req.body);
+        return res.status(400).json({ message: 'All fields are required.' });
     }
 
-    console.log("📝 Creating new customer profile:", {
-      firstName, lastName, email, emailMarketingStatus, metaData
-    });
+    try {
+        const basicAuth = `Basic ${Buffer.from(`${APP_ID}:${SECRET_KEY}`).toString('base64')}`;
 
-    // Create new customer profile.
-    const createResponse = await axios.post(`${C7_API_BASE}/customer`, {
-      firstName,
-      lastName,
-      emails: [{ email }],
-      emailMarketingStatus,
-      metaData,
-    }, {
-      headers: {
-        Authorization: basicAuth,
-        'Content-Type': 'application/json',
-        Tenant: TENANT_ID,
-      },
-    });
+        console.log("🔍 Checking if customer already exists:", email);
+        const searchResponse = await axios.get(`${C7_API_BASE}/customer`, {
+            params: { q: email },
+            headers: {
+                Authorization: basicAuth,
+                'Content-Type': 'application/json',
+                Tenant: TENANT_ID,
+            },
+        });
 
-    const newCustomer = createResponse.data;
-    console.log("✅ Customer created successfully:", newCustomer);
-    return res.status(201).json({
-      message: 'Account created successfully.',
-      customer: newCustomer,
-    });
-  } catch (error) {
-    console.error("❌ Error creating account in Commerce7:", error.response?.data || error.message);
-    return res.status(error.response?.status || 500).json({
-      message: 'Error creating account.',
-      error: error.response?.data || error.message,
-    });
-  }
+        const existingCustomer = searchResponse.data.customers?.[0];
+        if (existingCustomer) {
+            console.warn("⚠️ Customer already exists:", existingCustomer);
+            return res.status(409).json({
+                message: 'Customer already exists.',
+                customer: existingCustomer,
+            });
+        }
+
+        console.log("📝 Creating new customer profile:", { firstName, lastName, email, phone, emailMarketingStatus, metaData });
+
+        // Format phone correctly & log it before sending
+        const formattedPhone = phone ? formatPhoneNumber(phone) : null;
+        //console.log("📞 Formatted Phone:", formattedPhone);
+        const phoneData = formattedPhone ? [{ phone: formattedPhone }] : [];
+
+        // Ensure Instagram handle is included in metadata
+        const updatedMetaData = {
+            ...metaData,
+            instagram_handle: metaData?.instagram_handle || ""
+        };
+        console.log('heyyyyyyy:')
+console.log(phoneData);
+        // Create new customer profile.
+        const createResponse = await axios.post(`${C7_API_BASE}/customer`, {
+            firstName,
+            lastName,
+            emails: [{ email }],
+            phones: phoneData, // Ensure phone follows E.164 format
+            emailMarketingStatus,
+            countryCode: "US", // Required for Commerce7
+            metaData: updatedMetaData,
+        }, {
+            headers: {
+                Authorization: basicAuth,
+                'Content-Type': 'application/json',
+                Tenant: TENANT_ID,
+            },
+        });
+
+        const newCustomer = createResponse.data;
+        console.log("✅ Customer created successfully:", newCustomer);
+        return res.status(201).json({
+            message: 'Account created successfully.',
+            customer: newCustomer,
+        });
+    } catch (error) {
+        console.error("❌ Error creating account in Commerce7:", error.response?.data || error.message);
+        return res.status(error.response?.status || 500).json({
+            message: 'Error creating account.',
+            error: error.response?.data || error.message,
+        });
+    }
 });
+
+
 
 
 // --- Referral Tasting (protected) ---
