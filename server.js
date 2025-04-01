@@ -77,7 +77,128 @@ const TENANT_ID = process.env.TENANT_ID;
 const C7_API_BASE = 'https://api.commerce7.com/v1';
 const PROMOTION_ID = "a7623848-13ea-4b4e-9ae8-0f2799414f2c";
 const JWT_SECRET = process.env.JWT_SECRET || "your_jwt_secret";
+const INSTAGRAM_ACCESS_TOKEN = process.env.INSTAGRAM_ACCESS_TOKEN;
+const INSTAGRAM_BUSINESS_ID = process.env.INSTAGRAM_BUSINESS_ID;
+const WEBHOOK_VERIFY_TOKEN = process.env.WEBHOOK_VERIFY_TOKEN;
+const INSTAGRAM_APP_SECRET = process.env.INSTAGRAM_APP_SECRET;
 
+
+// ---------------- Helper Functions ----------------
+
+// Verify that the webhook request is authentic
+function verifyWebhookSignature(req) {
+  const signature = req.headers['x-hub-signature-256'];
+  if (!signature) {
+    console.error('No signature found in webhook request');
+    return false;
+  }
+
+  // Get the raw body of the request
+  const body = req.body;
+  
+  // The signature from Instagram is in the format: sha256=<hash>
+  const [signatureType, signatureHash] = signature.split('=');
+  
+  if (signatureType !== 'sha256') {
+    console.error('Unexpected signature type:', signatureType);
+    return false;
+  }
+  
+  // Compute the expected hash using our app secret
+  const crypto = require('crypto');
+  const expectedHash = crypto
+    .createHmac('sha256', process.env.INSTAGRAM_APP_SECRET)
+    .update(JSON.stringify(body))
+    .digest('hex');
+    
+  // Compare the expected hash with the provided hash
+  return signatureHash === expectedHash;
+}
+
+async function awardPointsForMention(instagramUsername, mentionCount = 1) {
+  const basicAuth = `Basic ${Buffer.from(`${APP_ID}:${SECRET_KEY}`).toString('base64')}`;
+
+  try {
+    // Search for customer with matching Instagram handle
+    const searchResponse = await axios.get(`${C7_API_BASE}/customer`, {
+      params: { 
+        metaData: { instagram_handle: instagramUsername }
+      },
+      headers: {
+        Authorization: basicAuth,
+        'Content-Type': 'application/json',
+        Tenant: TENANT_ID,
+      },
+    });
+
+    const customer = searchResponse.data.customers?.[0];
+    if (!customer) {
+      console.log(`No customer found with Instagram handle: ${instagramUsername}`);
+      return;
+    }
+
+    // Award points
+    const pointsToAward = mentionCount * 40;
+    
+    await axios.post(`${C7_API_BASE}/loyalty-transaction`, {
+      customerId: customer.id,
+      amount: pointsToAward,
+      notes: `Instagram mentions reward (${mentionCount} mentions)`,
+    }, {
+      headers: {
+        Authorization: basicAuth,
+        'Content-Type': 'application/json',
+        Tenant: TENANT_ID,
+      },
+    });
+
+    // Send Klaviyo notification
+    const klaviyoEvent = {
+      data: {
+        type: "event",
+        attributes: {
+          properties: {
+            "Points Awarded": pointsToAward,
+            "Mentions Count": mentionCount,
+            "Instagram Handle": instagramUsername,
+            "Total Points": (customer.loyalty?.points || 0) + pointsToAward
+          },
+          metric: {
+            data: {
+              type: "metric",
+              attributes: {
+                "name": "Instagram Mentions Points Awarded"
+              }
+            }
+          },
+          profile: {
+            data: {
+              type: "profile",
+              attributes: {
+                properties: {
+                  "$email": customer.emails[0]?.email
+                }
+              }
+            }
+          }
+        }
+      }
+    };
+
+    await axios.post("https://a.klaviyo.com/api/events", klaviyoEvent, {
+      headers: {
+        "Authorization": `Klaviyo-API-Key ${process.env.KLAVIYO_PRIVATE_KEY}`,
+        "Accept": "application/vnd.api+json",
+        "Content-Type": "application/vnd.api+json",
+        "Revision": "2025-01-15"
+      }
+    });
+
+    console.log(`Awarded ${pointsToAward} points to ${customer.emails[0]?.email} for Instagram mentions`);
+  } catch (error) {
+    console.error('Error awarding points for mention:', error.response?.data || error.message);
+  }
+}
 
 // ---------------- JWT Helper Functions ----------------
 
@@ -813,6 +934,74 @@ app.post('/api/submit-contact-form', async (req, res) => {
 });
 
 // ---------------- Start the Server ----------------
+
+// --- Instagram Webhook Verification Endpoint ---
+app.get('/webhook/instagram', (req, res) => {
+  const mode = req.query['hub.mode'];
+  const token = req.query['hub.verify_token'];
+  const challenge = req.query['hub.challenge'];
+
+  if (mode === 'subscribe' && token === WEBHOOK_VERIFY_TOKEN) {
+    console.log('Webhook verified');
+    res.status(200).send(challenge);
+  } else {
+    console.error('Webhook verification failed');
+    res.sendStatus(403);
+  }
+});
+
+// --- Instagram Webhook Notification Endpoint ---
+app.post('/webhook/instagram', async (req, res) => {
+  // Immediately respond to Instagram to acknowledge receipt
+  res.status(200).send('EVENT_RECEIVED');
+
+  try {
+    // Verify the request is from Instagram
+    if (!verifyWebhookSignature(req)) {
+      console.error('Invalid webhook signature');
+      return;
+    }
+
+    const { entry } = req.body;
+    
+    // Process each entry (there might be multiple)
+    for (const item of entry) {
+      // Check if this is a mention notification
+      if (item.changes && item.changes[0].value.caption) {
+        const caption = item.changes[0].value.caption;
+        const username = item.changes[0].value.from.username;
+        const mediaId = item.changes[0].value.media_id;
+
+        // Check if the caption mentions @mileaestatewinery
+        if (caption.includes('@mileaestatewinery')) {
+          console.log(`Processing mention from ${username} in media ${mediaId}`);
+          
+          // Fetch additional details about the post if needed
+          try {
+            const mediaResponse = await axios.get(`https://graph.facebook.com/v18.0/${mediaId}`, {
+              params: {
+                access_token: INSTAGRAM_ACCESS_TOKEN,
+                fields: 'caption,timestamp,media_type,permalink',
+              },
+            });
+            
+            const media = mediaResponse.data;
+            console.log(`Media details: permalink=${media.permalink}, timestamp=${media.timestamp}`);
+            
+            // Award points for the mention
+            await awardPointsForMention(username);
+          } catch (mediaError) {
+            console.error(`Error fetching media details: ${mediaError.message}`);
+            // Still try to award points even if we can't get additional details
+            await awardPointsForMention(username);
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error processing webhook:', error);
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
