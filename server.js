@@ -966,34 +966,22 @@ app.post('/webhook/instagram', async (req, res) => {
     
     // Process each entry (there might be multiple)
     for (const item of entry) {
-      // Check if this is a mention notification
-      if (item.changes && item.changes[0].value.caption) {
-        const caption = item.changes[0].value.caption;
-        const username = item.changes[0].value.from.username;
-        const mediaId = item.changes[0].value.media_id;
-
-        // Check if the caption mentions @mileaestatewinery
-        if (caption.includes('@mileaestatewinery')) {
-          console.log(`Processing mention from ${username} in media ${mediaId}`);
+      // For comments field, look for mentions in comments or captions
+      if (item.changes && item.changes[0] && item.changes[0].field === 'comments') {
+        const change = item.changes[0].value;
+        
+        // Could be a post caption or a comment
+        const text = change.text || change.caption || change.message || '';
+        const username = change.from?.username || change.username;
+        
+        if (text && username && text.includes('@mileaestatewinery')) {
+          console.log(`Processing mention from ${username}`);
           
-          // Fetch additional details about the post if needed
           try {
-            const mediaResponse = await axios.get(`https://graph.facebook.com/v18.0/${mediaId}`, {
-              params: {
-                access_token: INSTAGRAM_ACCESS_TOKEN,
-                fields: 'caption,timestamp,media_type,permalink',
-              },
-            });
-            
-            const media = mediaResponse.data;
-            console.log(`Media details: permalink=${media.permalink}, timestamp=${media.timestamp}`);
-            
             // Award points for the mention
             await awardPointsForMention(username);
-          } catch (mediaError) {
-            console.error(`Error fetching media details: ${mediaError.message}`);
-            // Still try to award points even if we can't get additional details
-            await awardPointsForMention(username);
+          } catch (error) {
+            console.error(`Error awarding points: ${error.message}`);
           }
         }
       }
