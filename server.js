@@ -242,7 +242,7 @@ function checkAuth(req, res, next) {
 // ---------------- Global Protection ----------------
 
 // Define public paths (only login and the root static assets are public).
-const publicPaths = ['/auth/login', '/', '/create-account', '/create-account.html'];
+const publicPaths = ['/auth/login', '/', '/create-account', '/create-account.html', '/webhook/instagram'];
 
 // All endpoints not matching the public paths will be protected.
 app.use((req, res, next) => {
@@ -937,15 +937,19 @@ app.post('/api/submit-contact-form', async (req, res) => {
 
 // --- Instagram Webhook Verification Endpoint ---
 app.get('/webhook/instagram', (req, res) => {
+  console.log('Webhook verification request received');
+  console.log('Query parameters:', req.query);
+  
   const mode = req.query['hub.mode'];
   const token = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
 
   if (mode === 'subscribe' && token === WEBHOOK_VERIFY_TOKEN) {
-    console.log('Webhook verified');
+    console.log('Webhook verified successfully');
     res.status(200).send(challenge);
   } else {
     console.error('Webhook verification failed');
+    console.error(`Expected token: "${WEBHOOK_VERIFY_TOKEN}", received: "${token}"`);
     res.sendStatus(403);
   }
 });
