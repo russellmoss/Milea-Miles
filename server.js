@@ -82,6 +82,127 @@ const INSTAGRAM_BUSINESS_ID = process.env.INSTAGRAM_BUSINESS_ID;
 const WEBHOOK_VERIFY_TOKEN = process.env.WEBHOOK_VERIFY_TOKEN;
 const INSTAGRAM_APP_SECRET = process.env.INSTAGRAM_APP_SECRET;
 
+// ---------------- Instagram Handle Database ----------------
+
+// In-memory database of Instagram handles to customer IDs
+const instagramHandleMap = new Map();
+let lastDatabaseUpdateTime = null;
+let isDatabaseBuilding = false;
+
+// Function to build the Instagram handle database
+async function buildInstagramHandleDatabase() {
+  if (isDatabaseBuilding) {
+    console.log('Instagram database build already in progress');
+    return;
+  }
+
+  isDatabaseBuilding = true;
+  console.log('Starting to build Instagram handle database...');
+  
+  const basicAuth = `Basic ${Buffer.from(`${APP_ID}:${SECRET_KEY}`).toString('base64')}`;
+  const batchSize = 100;
+  let page = 1;
+  let hasMore = true;
+  let totalProcessed = 0;
+  let customersWithInstagram = 0;
+  
+  try {
+    while (hasMore) {
+      console.log(`Fetching customer batch ${page} (${batchSize} customers per batch)`);
+      
+      try {
+        const response = await axios.get(`${C7_API_BASE}/customer`, {
+          params: { 
+            limit: batchSize,
+            page: page
+          },
+          headers: {
+            Authorization: basicAuth,
+            'Content-Type': 'application/json',
+            Tenant: TENANT_ID,
+          },
+        });
+        
+        const customers = response.data.customers || [];
+        totalProcessed += customers.length;
+        
+        // If we got fewer customers than the batch size, we're done
+        if (customers.length < batchSize) {
+          hasMore = false;
+        }
+        
+        // Store customers with Instagram handles in our map
+        for (const customer of customers) {
+          if (customer.metaData && customer.metaData.instagram_handle) {
+            const instagramHandle = customer.metaData.instagram_handle;
+            
+            // Store customer info in our map
+            instagramHandleMap.set(instagramHandle.toLowerCase(), {
+              id: customer.id,
+              email: customer.emails[0]?.email,
+              fullHandle: instagramHandle,
+              points: customer.loyalty?.points || 0
+            });
+            
+            customersWithInstagram++;
+          }
+        }
+        
+        page++;
+        
+        // Add rate limiting to avoid hitting Commerce7 API limits
+        // Wait 5 seconds between batches to be much more gentle with the API
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        
+      } catch (error) {
+        console.error(`Error fetching customer batch ${page}:`, error.message);
+        // Wait longer if we hit an error (possibly rate limiting)
+        await new Promise(resolve => setTimeout(resolve, 10000));
+        
+        // If we keep getting errors, eventually give up
+        if (page > 3 && totalProcessed === 0) {
+          hasMore = false;
+          console.error('Unable to fetch customers after multiple attempts. Giving up.');
+        }
+      }
+    }
+    
+    lastDatabaseUpdateTime = new Date();
+    console.log(`Instagram handle database build complete! Processed ${totalProcessed} customers.`);
+    console.log(`Found ${customersWithInstagram} customers with Instagram handles.`);
+    console.log(`First 5 handles in database: ${[...instagramHandleMap.keys()].slice(0, 5).join(', ')}`);
+    
+  } catch (error) {
+    console.error('Error building Instagram handle database:', error);
+  } finally {
+    isDatabaseBuilding = false;
+  }
+}
+
+// Function to update the Instagram handle database daily
+async function updateInstagramHandleDatabase() {
+  // If we've updated in the last 24 hours, skip
+  if (lastDatabaseUpdateTime && 
+      (new Date() - lastDatabaseUpdateTime) < (24 * 60 * 60 * 1000)) {
+    console.log('Instagram database was updated recently, skipping update');
+    return;
+  }
+  
+  console.log('Running daily update of Instagram handle database...');
+  
+  // For the first implementation, we'll just rebuild the whole database
+  // In phase 2, we can optimize to only fetch new/changed customers
+  await buildInstagramHandleDatabase();
+  
+  // Schedule next update for tomorrow
+  setTimeout(updateInstagramHandleDatabase, 24 * 60 * 60 * 1000);
+}
+
+// Build the database when the server starts
+buildInstagramHandleDatabase().then(() => {
+  // Schedule daily updates
+  setTimeout(updateInstagramHandleDatabase, 24 * 60 * 60 * 1000);
+});
 
 // ---------------- Helper Functions ----------------
 
@@ -115,6 +236,87 @@ function verifyWebhookSignature(req) {
   return signatureHash === expectedHash;
 }
 
+// Find customer by Instagram handle using our database
+function findCustomerByInstagramHandleFromDatabase(instagramHandle) {
+  // Normalize the handle for case-insensitive lookup
+  const normalizedHandle = instagramHandle.toLowerCase();
+  
+  if (instagramHandleMap.has(normalizedHandle)) {
+    const customer = instagramHandleMap.get(normalizedHandle);
+    console.log(`Found customer in database: ${customer.id} (${customer.email}) with Instagram handle: ${customer.fullHandle}`);
+    return customer;
+  }
+  
+  console.log(`No customer found in database with Instagram handle: "${instagramHandle}"`);
+  return null;
+}
+
+// Find customer by Instagram handle by searching Commerce7 (fallback method)
+async function findCustomerByInstagramHandle(instagramHandle) {
+  const basicAuth = `Basic ${Buffer.from(`${APP_ID}:${SECRET_KEY}`).toString('base64')}`;
+  
+  console.log(`Looking for customer with Instagram handle: "${instagramHandle}"`);
+  
+  // With 12K+ customers, we need to be strategic about how we fetch them
+  // Let's try fetching a reasonable batch size at a time
+  const batchSize = 100;
+  let page = 1;
+  let hasMore = true;
+  
+  // Since we can't efficiently search metadata fields, we'll need to 
+  // fetch customers in batches and filter them on our side
+  while (hasMore) {
+    console.log(`Fetching batch ${page} (${batchSize} customers per batch)`);
+    
+    try {
+      const response = await axios.get(`${C7_API_BASE}/customer`, {
+        params: { 
+          limit: batchSize,
+          page: page
+        },
+        headers: {
+          Authorization: basicAuth,
+          'Content-Type': 'application/json',
+          Tenant: TENANT_ID,
+        },
+      });
+      
+      const customers = response.data.customers || [];
+      
+      // If we got fewer customers than the batch size, we're done after this batch
+      if (customers.length < batchSize) {
+        hasMore = false;
+      }
+      
+      console.log(`Processing ${customers.length} customers in batch ${page}`);
+      
+      // Look for customer with matching Instagram handle
+      for (const customer of customers) {
+        if (customer.metaData && customer.metaData.instagram_handle === instagramHandle) {
+          console.log(`Found customer ${customer.id} (${customer.emails[0]?.email}) with Instagram handle: ${instagramHandle}`);
+          return customer;
+        }
+      }
+      
+      // Move to next page
+      page++;
+      
+      // Safety check - don't process more than 50 pages (5000 customers)
+      // We can adjust this limit based on your needs
+      if (page > 50) {
+        console.log(`Reached maximum page limit (${page}). Stopping search.`);
+        hasMore = false;
+      }
+    } catch (error) {
+      console.error(`Error fetching customer batch ${page}:`, error.message);
+      hasMore = false;
+    }
+  }
+  
+  console.log(`No customer found with Instagram handle: "${instagramHandle}" after checking all available customers`);
+  return null;
+}
+
 async function awardPointsForMention(instagramUsername, mentionCount = 1) {
   const basicAuth = `Basic ${Buffer.from(`${APP_ID}:${SECRET_KEY}`).toString('base64')}`;
 
@@ -122,33 +324,43 @@ async function awardPointsForMention(instagramUsername, mentionCount = 1) {
     // Instagram webhooks don't include the @ symbol, but we store it with @ in Commerce7
     const searchHandle = '@' + instagramUsername;
     
-    console.log(`Searching for customer with Instagram handle: "${searchHandle}"`);
+    // First, try to find the customer in our in-memory database (fast lookup)
+    let customerInfo = findCustomerByInstagramHandleFromDatabase(searchHandle);
     
-    // Search directly using the handle with @ as stored in Commerce7
-    const searchResponse = await axios.get(`${C7_API_BASE}/customer`, {
-      params: { 
-        q: searchHandle  // Search for the handle exactly as stored
-      },
-      headers: {
-        Authorization: basicAuth,
-        'Content-Type': 'application/json',
-        Tenant: TENANT_ID,
-      },
-    });
-    
-    const customers = searchResponse.data.customers || [];
-    console.log(`Found ${customers.length} potential matches from search`);
-    
-    // Find exact match for the Instagram handle
+    // If customer not found in database and database building is complete, fall back to direct search
     let customer = null;
     
-    for (const c of customers) {
-      if (c.metaData && c.metaData.instagram_handle === searchHandle) {
-        customer = c;
-        console.log(`Found exact match: Customer ${c.id} (${c.emails[0]?.email})`);
-        console.log(`Instagram handle in Commerce7: "${c.metaData.instagram_handle}"`);
-        break;
+    if (customerInfo) {
+      // We have basic info from our database, but need to fetch full customer details
+      try {
+        const customerResponse = await axios.get(`${C7_API_BASE}/customer/${customerInfo.id}`, {
+          headers: {
+            Authorization: basicAuth,
+            'Content-Type': 'application/json',
+            Tenant: TENANT_ID,
+          },
+        });
+        customer = customerResponse.data;
+      } catch (error) {
+        console.error(`Error fetching customer details for ${customerInfo.id}:`, error.message);
       }
+    } else if (!isDatabaseBuilding) {
+      // If the database isn't being built and we didn't find the handle,
+      // fall back to the direct search method
+      console.log('Customer not found in database, falling back to direct search...');
+      customer = await findCustomerByInstagramHandle(searchHandle);
+      
+      // If we find the customer via direct search, add them to our database for next time
+      if (customer) {
+        instagramHandleMap.set(searchHandle.toLowerCase(), {
+          id: customer.id,
+          email: customer.emails[0]?.email,
+          fullHandle: searchHandle,
+          points: customer.loyalty?.points || 0
+        });
+      }
+    } else {
+      console.log('Database is still building and customer not found. Try again later.');
     }
     
     if (!customer) {
@@ -215,6 +427,13 @@ async function awardPointsForMention(instagramUsername, mentionCount = 1) {
         "Revision": "2025-01-15"
       }
     });
+
+    // Update customer's points in our database
+    if (instagramHandleMap.has(searchHandle.toLowerCase())) {
+      const updatedInfo = instagramHandleMap.get(searchHandle.toLowerCase());
+      updatedInfo.points += pointsToAward;
+      instagramHandleMap.set(searchHandle.toLowerCase(), updatedInfo);
+    }
 
     console.log(`Successfully awarded ${pointsToAward} points to ${customer.emails[0]?.email} for Instagram mentions`);
   } catch (error) {
@@ -849,6 +1068,30 @@ app.post('/api/update-instagram', async (req, res) => {
         Tenant: TENANT_ID,
       },
     });
+    
+    // Also update our in-memory database with the new Instagram handle
+    if (instagramHandle) {
+      console.log(`Updating in-memory database with Instagram handle: ${instagramHandle} for customer ${customer.id}`);
+      
+      // If customer had a previous handle, remove it from the map
+      if (customer.metaData && customer.metaData.instagram_handle) {
+        const oldHandle = customer.metaData.instagram_handle;
+        if (oldHandle.toLowerCase() !== instagramHandle.toLowerCase()) {
+          instagramHandleMap.delete(oldHandle.toLowerCase());
+          console.log(`Removed old Instagram handle: ${oldHandle} from database`);
+        }
+      }
+      
+      // Add/update the new handle in our map
+      instagramHandleMap.set(instagramHandle.toLowerCase(), {
+        id: customer.id,
+        email: customer.emails[0]?.email,
+        fullHandle: instagramHandle,
+        points: customer.loyalty?.points || 0
+      });
+      console.log(`Added Instagram handle: ${instagramHandle} to in-memory database`);
+    }
+    
     console.log('Instagram handle update response:', updateResponse.data);
     return res.json({ success: true, message: 'Instagram handle updated successfully.' });
   } catch (error) {
