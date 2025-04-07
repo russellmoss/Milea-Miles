@@ -119,12 +119,14 @@ async function awardPointsForMention(instagramUsername, mentionCount = 1) {
   const basicAuth = `Basic ${Buffer.from(`${APP_ID}:${SECRET_KEY}`).toString('base64')}`;
 
   try {
-    // Search for customer with matching Instagram handle
+    // Commerce7 doesn't support direct metadata querying in params, so we'll need to:
+    // 1. Search by the Instagram handle as a general query term
+    // 2. Filter the results ourselves to find exact metadata matches
     console.log(`Searching for customer with Instagram handle: ${instagramUsername}`);
     
     const searchResponse = await axios.get(`${C7_API_BASE}/customer`, {
       params: { 
-        'metaData.instagram_handle': instagramUsername  // Use dot notation instead of nested object
+        q: instagramUsername  // Use general search instead of metadata-specific search
       },
       headers: {
         Authorization: basicAuth,
@@ -133,7 +135,19 @@ async function awardPointsForMention(instagramUsername, mentionCount = 1) {
       },
     });
 
-    const customer = searchResponse.data.customers?.[0];
+    // Filter the customers to find one with the exact matching Instagram handle in metadata
+    let customer = null;
+    const customers = searchResponse.data.customers || [];
+    console.log(`Found ${customers.length} potential matches, filtering for exact match...`);
+    
+    for (const c of customers) {
+      if (c.metaData && c.metaData.instagram_handle === instagramUsername) {
+        customer = c;
+        console.log(`Found exact match: ${customer.id} (${customer.emails[0]?.email})`);
+        break;
+      }
+    }
+    
     if (!customer) {
       console.log(`No customer found with Instagram handle: ${instagramUsername}`);
       return;
