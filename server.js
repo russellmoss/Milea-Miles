@@ -119,16 +119,15 @@ async function awardPointsForMention(instagramUsername, mentionCount = 1) {
   const basicAuth = `Basic ${Buffer.from(`${APP_ID}:${SECRET_KEY}`).toString('base64')}`;
 
   try {
-    // Normalize the Instagram username - try with and without @ symbol
-    const usernameWithoutAt = instagramUsername.replace('@', '');
-    const usernameWithAt = '@' + usernameWithoutAt;
+    // Instagram webhooks don't include the @ symbol, but we store it with @ in Commerce7
+    const searchHandle = '@' + instagramUsername;
     
-    console.log(`Searching for customer with Instagram handle: ${instagramUsername}`);
-    console.log(`Will try variations: "${usernameWithAt}" and "${usernameWithoutAt}"`);
+    console.log(`Searching for customer with Instagram handle: "${searchHandle}"`);
     
+    // Search directly using the handle with @ as stored in Commerce7
     const searchResponse = await axios.get(`${C7_API_BASE}/customer`, {
       params: { 
-        q: usernameWithoutAt  // Search by the username without @ for better results
+        q: searchHandle  // Search for the handle exactly as stored
       },
       headers: {
         Authorization: basicAuth,
@@ -136,30 +135,24 @@ async function awardPointsForMention(instagramUsername, mentionCount = 1) {
         Tenant: TENANT_ID,
       },
     });
-
-    // Filter the customers to find matching Instagram handle, checking both formats
-    let customer = null;
+    
     const customers = searchResponse.data.customers || [];
-    console.log(`Found ${customers.length} potential matches, checking for exact match...`);
+    console.log(`Found ${customers.length} potential matches from search`);
+    
+    // Find exact match for the Instagram handle
+    let customer = null;
     
     for (const c of customers) {
-      if (!c.metaData || !c.metaData.instagram_handle) continue;
-      
-      const storedHandle = c.metaData.instagram_handle;
-      const storedHandleNormalized = storedHandle.replace('@', '').toLowerCase();
-      const searchHandleNormalized = usernameWithoutAt.toLowerCase();
-      
-      // Check if handles match regardless of @ symbol
-      if (storedHandleNormalized === searchHandleNormalized) {
+      if (c.metaData && c.metaData.instagram_handle === searchHandle) {
         customer = c;
-        console.log(`Found matching customer: ${customer.id} (${customer.emails[0]?.email})`);
-        console.log(`Stored Instagram handle: "${storedHandle}", Searching for: "${instagramUsername}"`);
+        console.log(`Found exact match: Customer ${c.id} (${c.emails[0]?.email})`);
+        console.log(`Instagram handle in Commerce7: "${c.metaData.instagram_handle}"`);
         break;
       }
     }
     
     if (!customer) {
-      console.log(`No customer found with Instagram handle: ${instagramUsername}`);
+      console.log(`No customer found with Instagram handle: "${searchHandle}"`);
       return;
     }
 
@@ -167,7 +160,7 @@ async function awardPointsForMention(instagramUsername, mentionCount = 1) {
     const pointsToAward = mentionCount * 40;
     console.log(`Awarding ${pointsToAward} points to customer ${customer.id} (${customer.emails[0]?.email})`);
     
-    await axios.post(`${C7_API_BASE}/loyalty-transaction`, {
+    const loyaltyResponse = await axios.post(`${C7_API_BASE}/loyalty-transaction`, {
       customerId: customer.id,
       amount: pointsToAward,
       notes: `Instagram mentions reward (${mentionCount} mentions)`,
@@ -178,6 +171,8 @@ async function awardPointsForMention(instagramUsername, mentionCount = 1) {
         Tenant: TENANT_ID,
       },
     });
+    
+    console.log('Loyalty points awarded successfully:', loyaltyResponse.data.id);
 
     // Send Klaviyo notification
     const klaviyoEvent = {
@@ -187,7 +182,7 @@ async function awardPointsForMention(instagramUsername, mentionCount = 1) {
           properties: {
             "Points Awarded": pointsToAward,
             "Mentions Count": mentionCount,
-            "Instagram Handle": instagramUsername,
+            "Instagram Handle": searchHandle,
             "Total Points": (customer.loyalty?.points || 0) + pointsToAward
           },
           metric: {
