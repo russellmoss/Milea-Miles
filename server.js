@@ -92,6 +92,11 @@ const INSTAGRAM_DB_FILE = path.join(__dirname, 'instagram_handle_database.json')
 const instagramHandleMap = new Map();
 let lastDatabaseUpdateTime = null;
 let isDatabaseBuilding = false;
+let databaseBuildStatus = {
+  lastStarted: null,
+  currentProgress: "Not started",
+  handlesFound: 0
+};
 
 // Function to save the Instagram handle database to a file
 function saveInstagramHandleDatabase() {
@@ -162,6 +167,8 @@ async function buildInstagramHandleDatabase() {
   // First check if we can load from file
   if (loadInstagramHandleDatabase()) {
     console.log('Successfully loaded Instagram handle database from file. Skipping build.');
+    databaseBuildStatus.currentProgress = "Loaded from file";
+    databaseBuildStatus.handlesFound = instagramHandleMap.size;
     return;
   }
   
@@ -171,6 +178,11 @@ async function buildInstagramHandleDatabase() {
   }
 
   isDatabaseBuilding = true;
+  databaseBuildStatus = {
+    lastStarted: new Date(),
+    currentProgress: "Building in progress",
+    handlesFound: 0
+  };
   console.log('Starting to build Instagram handle database...');
   
   const basicAuth = `Basic ${Buffer.from(`${APP_ID}:${SECRET_KEY}`).toString('base64')}`;
@@ -183,6 +195,7 @@ async function buildInstagramHandleDatabase() {
   try {
     while (hasMore) {
       console.log(`Fetching customer batch ${page} (${batchSize} customers per batch)`);
+      databaseBuildStatus.currentProgress = `Processing batch ${page} (${totalProcessed} customers so far, ${customersWithInstagram} handles found)`;
       
       try {
         // Commerce7 may have issues with the offset/limit approach
@@ -227,6 +240,8 @@ async function buildInstagramHandleDatabase() {
           }
         }
         
+        databaseBuildStatus.handlesFound = customersWithInstagram;
+        
         page++;
         
         // Save database to file after each batch to ensure we don't lose progress
@@ -243,12 +258,15 @@ async function buildInstagramHandleDatabase() {
         console.error(`Error fetching customer batch ${page}:`, error.message);
         console.error(`Error details:`, error.response?.data || 'No additional details');
         
+        databaseBuildStatus.currentProgress = `Error on batch ${page}: ${error.message}`;
+        
         // Wait longer if we hit an error (possibly rate limiting)
         await new Promise(resolve => setTimeout(resolve, 10000));
         
         // If we keep getting errors, eventually give up
         if (page > 3 && totalProcessed === 0) {
           hasMore = false;
+          databaseBuildStatus.currentProgress = "Failed after multiple attempts";
           console.error('Unable to fetch customers after multiple attempts. Giving up.');
         }
       }
@@ -259,6 +277,8 @@ async function buildInstagramHandleDatabase() {
     // Save final database to file
     saveInstagramHandleDatabase();
     
+    databaseBuildStatus.currentProgress = "Complete";
+    
     console.log(`Instagram handle database build complete! Processed ${totalProcessed} customers.`);
     console.log(`Found ${customersWithInstagram} customers with Instagram handles.`);
     if (customersWithInstagram > 0) {
@@ -267,6 +287,7 @@ async function buildInstagramHandleDatabase() {
     
   } catch (error) {
     console.error('Error building Instagram handle database:', error);
+    databaseBuildStatus.currentProgress = `Failed with error: ${error.message}`;
   } finally {
     isDatabaseBuilding = false;
   }
@@ -274,27 +295,57 @@ async function buildInstagramHandleDatabase() {
 
 // Function to update the Instagram handle database daily
 async function updateInstagramHandleDatabase() {
-  // If we've updated in the last 24 hours, skip
-  if (lastDatabaseUpdateTime && 
-      (new Date() - lastDatabaseUpdateTime) < (24 * 60 * 60 * 1000)) {
+  // Schedule next update for 2:00 AM
+  const scheduleNextUpdate = () => {
+    const now = new Date();
+    const nextUpdate = new Date();
+    
+    // Set time to 2:00 AM
+    nextUpdate.setHours(2, 0, 0, 0);
+    
+    // If it's already past 2:00 AM, schedule for tomorrow
+    if (now > nextUpdate) {
+      nextUpdate.setDate(nextUpdate.getDate() + 1);
+    }
+    
+    const timeUntilNextUpdate = nextUpdate - now;
+    console.log(`Scheduled next Instagram database update for ${nextUpdate.toLocaleString()}`);
+    console.log(`(${Math.round(timeUntilNextUpdate / (1000 * 60 * 60))} hours from now)`);
+    
+    setTimeout(updateInstagramHandleDatabase, timeUntilNextUpdate);
+  };
+  
+  // Check if a full rebuild is needed
+  const shouldRebuild = () => {
+    // If no last update time, definitely rebuild
+    if (!lastDatabaseUpdateTime) return true;
+    
+    // Check if it's been more than 24 hours
+    const daysSinceUpdate = (new Date() - lastDatabaseUpdateTime) / (24 * 60 * 60 * 1000);
+    
+    return daysSinceUpdate >= 1;
+  };
+  
+  if (shouldRebuild()) {
+    console.log('Running daily update of Instagram handle database...');
+    
+    // Rebuild the whole database
+    await buildInstagramHandleDatabase();
+    
+    // Schedule next update
+    scheduleNextUpdate();
+  } else {
     console.log('Instagram database was updated recently, skipping update');
-    return;
+    
+    // Still schedule next update at 2:00 AM
+    scheduleNextUpdate();
   }
-  
-  console.log('Running daily update of Instagram handle database...');
-  
-  // For the first implementation, we'll just rebuild the whole database
-  // In phase 2, we can optimize to only fetch new/changed customers
-  await buildInstagramHandleDatabase();
-  
-  // Schedule next update for tomorrow
-  setTimeout(updateInstagramHandleDatabase, 24 * 60 * 60 * 1000);
 }
 
 // Build the database when the server starts
 buildInstagramHandleDatabase().then(() => {
-  // Schedule daily updates
-  setTimeout(updateInstagramHandleDatabase, 24 * 60 * 60 * 1000);
+  // Schedule first update for 2:00 AM
+  updateInstagramHandleDatabase();
 });
 
 // ---------------- Helper Functions ----------------
@@ -600,7 +651,7 @@ function checkAuth(req, res, next) {
 // ---------------- Global Protection ----------------
 
 // Define public paths (only login and the root static assets are public).
-const publicPaths = ['/auth/login', '/', '/create-account', '/create-account.html', '/webhook/instagram', '/test-instagram-mention'];
+const publicPaths = ['/auth/login', '/', '/create-account', '/create-account.html', '/webhook/instagram', '/test-instagram-mention', '/temp-get-instagram-database'];
 
 // All endpoints not matching the public paths will be protected.
 app.use((req, res, next) => {
@@ -611,6 +662,32 @@ app.use((req, res, next) => {
 });
 
 // ---------------- Endpoints ----------------
+
+// --- Status endpoint for Instagram database build ---
+app.get('/api/instagram-database-status', checkAuth, (req, res) => {
+  res.json({
+    isDatabaseBuilding,
+    databaseSize: instagramHandleMap.size,
+    lastUpdated: lastDatabaseUpdateTime,
+    buildStatus: databaseBuildStatus
+  });
+});
+
+// --- Temporary public endpoint to get the Instagram handle database file ---
+// TODO: REMOVE THIS ENDPOINT AFTER DOWNLOADING THE FILE FOR SECURITY
+app.get('/temp-get-instagram-database', (req, res) => {
+  try {
+    if (!fs.existsSync(INSTAGRAM_DB_FILE)) {
+      return res.status(404).json({ error: 'Instagram handle database file not found' });
+    }
+    
+    console.log('SECURITY NOTICE: Someone is downloading the Instagram database file via the public endpoint!');
+    res.download(INSTAGRAM_DB_FILE, 'instagram_handle_database.json');
+  } catch (error) {
+    console.error('Error serving Instagram handle database file:', error);
+    res.status(500).json({ error: 'Error serving database file' });
+  }
+});
 
 // --- API endpoint to get the Instagram handle database file ---
 app.get('/api/get-instagram-database', checkAuth, (req, res) => {
