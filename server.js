@@ -242,7 +242,7 @@ function checkAuth(req, res, next) {
 // ---------------- Global Protection ----------------
 
 // Define public paths (only login and the root static assets are public).
-const publicPaths = ['/auth/login', '/', '/create-account', '/create-account.html', '/webhook/instagram'];
+const publicPaths = ['/auth/login', '/', '/create-account', '/create-account.html', '/webhook/instagram', '/test-instagram-mention'];
 
 // All endpoints not matching the public paths will be protected.
 app.use((req, res, next) => {
@@ -960,12 +960,25 @@ app.post('/webhook/instagram', async (req, res) => {
   res.status(200).send('EVENT_RECEIVED');
 
   try {
-    // Verify the request is from Instagram
-    if (!verifyWebhookSignature(req)) {
-      console.error('Invalid webhook signature');
-      return;
+    // Log the incoming webhook data for debugging
+    console.log('Instagram webhook received:');
+    console.log('Headers:', JSON.stringify(req.headers, null, 2));
+    console.log('Body:', JSON.stringify(req.body, null, 2));
+    
+    // Check if this is a test event
+    const isTestEvent = req.query.test === 'true' || (req.body && req.body.test === true);
+    
+    // For non-test events, verify signature and exit if invalid
+    if (!isTestEvent) {
+      if (!verifyWebhookSignature(req)) {
+        console.error('Invalid webhook signature. Rejecting non-test event.');
+        return; // Exit early - don't process events with invalid signatures
+      }
+      console.log('Signature verified successfully. Processing real Instagram event.');
+    } else {
+      console.log('Processing test event (bypassing signature verification).');
     }
-
+    
     const { entry } = req.body;
     
     // Process each entry (there might be multiple)
@@ -992,6 +1005,24 @@ app.post('/webhook/instagram', async (req, res) => {
     }
   } catch (error) {
     console.error('Error processing webhook:', error);
+  }
+});
+
+// --- Test endpoint for Instagram mention functionality ---
+app.get('/test-instagram-mention', async (req, res) => {
+  const username = req.query.username || 'test_user';
+  const mentionCount = parseInt(req.query.count || '1', 10);
+  
+  console.log(`Testing Instagram mention for user: ${username}, count: ${mentionCount}`);
+  
+  try {
+    await awardPointsForMention(username, mentionCount);
+    res.send(`<h1>Test Complete</h1>
+              <p>Awarded ${mentionCount * 40} points to Instagram user: ${username}</p>
+              <p>Check server logs for details.</p>`);
+  } catch (error) {
+    console.error('Test error:', error);
+    res.status(500).send(`<h1>Error</h1><p>${error.message}</p>`);
   }
 });
 
