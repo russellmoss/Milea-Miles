@@ -120,9 +120,11 @@ async function awardPointsForMention(instagramUsername, mentionCount = 1) {
 
   try {
     // Search for customer with matching Instagram handle
+    console.log(`Searching for customer with Instagram handle: ${instagramUsername}`);
+    
     const searchResponse = await axios.get(`${C7_API_BASE}/customer`, {
       params: { 
-        metaData: { instagram_handle: instagramUsername }
+        'metaData.instagram_handle': instagramUsername  // Use dot notation instead of nested object
       },
       headers: {
         Authorization: basicAuth,
@@ -139,6 +141,7 @@ async function awardPointsForMention(instagramUsername, mentionCount = 1) {
 
     // Award points
     const pointsToAward = mentionCount * 40;
+    console.log(`Awarding ${pointsToAward} points to customer ${customer.id} (${customer.emails[0]?.email})`);
     
     await axios.post(`${C7_API_BASE}/loyalty-transaction`, {
       customerId: customer.id,
@@ -194,7 +197,7 @@ async function awardPointsForMention(instagramUsername, mentionCount = 1) {
       }
     });
 
-    console.log(`Awarded ${pointsToAward} points to ${customer.emails[0]?.email} for Instagram mentions`);
+    console.log(`Successfully awarded ${pointsToAward} points to ${customer.emails[0]?.email} for Instagram mentions`);
   } catch (error) {
     console.error('Error awarding points for mention:', error.response?.data || error.message);
   }
