@@ -334,13 +334,33 @@ function findCustomerByInstagramHandleFromDatabase(instagramHandle) {
   // Normalize the handle for case-insensitive lookup
   const normalizedHandle = instagramHandle.toLowerCase();
   
+  // Try the exact handle first
   if (instagramHandleMap.has(normalizedHandle)) {
     const customer = instagramHandleMap.get(normalizedHandle);
-    console.log(`Found customer in database: ${customer.id} (${customer.email}) with Instagram handle: ${customer.fullHandle}`);
+    console.log(`Found customer in database with exact handle: ${customer.id} (${customer.email}) with Instagram handle: ${customer.fullHandle}`);
     return customer;
   }
   
-  console.log(`No customer found in database with Instagram handle: "${instagramHandle}"`);
+  // Try without @ if the handle starts with @
+  if (normalizedHandle.startsWith('@')) {
+    const withoutAtHandle = normalizedHandle.substring(1);
+    if (instagramHandleMap.has(withoutAtHandle)) {
+      const customer = instagramHandleMap.get(withoutAtHandle);
+      console.log(`Found customer in database without @ symbol: ${customer.id} (${customer.email}) with Instagram handle: ${customer.fullHandle}`);
+      return customer;
+    }
+  } 
+  // Try with @ if the handle doesn't start with @
+  else {
+    const withAtHandle = '@' + normalizedHandle;
+    if (instagramHandleMap.has(withAtHandle)) {
+      const customer = instagramHandleMap.get(withAtHandle);
+      console.log(`Found customer in database with added @ symbol: ${customer.id} (${customer.email}) with Instagram handle: ${customer.fullHandle}`);
+      return customer;
+    }
+  }
+  
+  console.log(`No customer found in database with Instagram handle: "${instagramHandle}" (tried variations with/without @)`);
   return null;
 }
 
