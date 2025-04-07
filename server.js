@@ -119,14 +119,16 @@ async function awardPointsForMention(instagramUsername, mentionCount = 1) {
   const basicAuth = `Basic ${Buffer.from(`${APP_ID}:${SECRET_KEY}`).toString('base64')}`;
 
   try {
-    // Commerce7 doesn't support direct metadata querying in params, so we'll need to:
-    // 1. Search by the Instagram handle as a general query term
-    // 2. Filter the results ourselves to find exact metadata matches
+    // Normalize the Instagram username - try with and without @ symbol
+    const usernameWithoutAt = instagramUsername.replace('@', '');
+    const usernameWithAt = '@' + usernameWithoutAt;
+    
     console.log(`Searching for customer with Instagram handle: ${instagramUsername}`);
+    console.log(`Will try variations: "${usernameWithAt}" and "${usernameWithoutAt}"`);
     
     const searchResponse = await axios.get(`${C7_API_BASE}/customer`, {
       params: { 
-        q: instagramUsername  // Use general search instead of metadata-specific search
+        q: usernameWithoutAt  // Search by the username without @ for better results
       },
       headers: {
         Authorization: basicAuth,
@@ -135,15 +137,23 @@ async function awardPointsForMention(instagramUsername, mentionCount = 1) {
       },
     });
 
-    // Filter the customers to find one with the exact matching Instagram handle in metadata
+    // Filter the customers to find matching Instagram handle, checking both formats
     let customer = null;
     const customers = searchResponse.data.customers || [];
-    console.log(`Found ${customers.length} potential matches, filtering for exact match...`);
+    console.log(`Found ${customers.length} potential matches, checking for exact match...`);
     
     for (const c of customers) {
-      if (c.metaData && c.metaData.instagram_handle === instagramUsername) {
+      if (!c.metaData || !c.metaData.instagram_handle) continue;
+      
+      const storedHandle = c.metaData.instagram_handle;
+      const storedHandleNormalized = storedHandle.replace('@', '').toLowerCase();
+      const searchHandleNormalized = usernameWithoutAt.toLowerCase();
+      
+      // Check if handles match regardless of @ symbol
+      if (storedHandleNormalized === searchHandleNormalized) {
         customer = c;
-        console.log(`Found exact match: ${customer.id} (${customer.emails[0]?.email})`);
+        console.log(`Found matching customer: ${customer.id} (${customer.emails[0]?.email})`);
+        console.log(`Stored Instagram handle: "${storedHandle}", Searching for: "${instagramUsername}"`);
         break;
       }
     }
