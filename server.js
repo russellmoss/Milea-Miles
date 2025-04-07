@@ -100,7 +100,7 @@ async function buildInstagramHandleDatabase() {
   console.log('Starting to build Instagram handle database...');
   
   const basicAuth = `Basic ${Buffer.from(`${APP_ID}:${SECRET_KEY}`).toString('base64')}`;
-  const batchSize = 100;
+  const batchSize = 50; // Reduced batch size to be more conservative
   let page = 1;
   let hasMore = true;
   let totalProcessed = 0;
@@ -111,10 +111,13 @@ async function buildInstagramHandleDatabase() {
       console.log(`Fetching customer batch ${page} (${batchSize} customers per batch)`);
       
       try {
+        // Commerce7 may have issues with the offset/limit approach
+        // Let's use createdAt as a filter to get all customers
         const response = await axios.get(`${C7_API_BASE}/customer`, {
           params: { 
             limit: batchSize,
-            page: page
+            page: page,
+            sort: 'createdAt' // Sort by creation date to have a consistent ordering
           },
           headers: {
             Authorization: basicAuth,
@@ -130,6 +133,8 @@ async function buildInstagramHandleDatabase() {
         if (customers.length < batchSize) {
           hasMore = false;
         }
+        
+        console.log(`Processing ${customers.length} customers from batch ${page}`);
         
         // Store customers with Instagram handles in our map
         for (const customer of customers) {
@@ -156,6 +161,8 @@ async function buildInstagramHandleDatabase() {
         
       } catch (error) {
         console.error(`Error fetching customer batch ${page}:`, error.message);
+        console.error(`Error details:`, error.response?.data || 'No additional details');
+        
         // Wait longer if we hit an error (possibly rate limiting)
         await new Promise(resolve => setTimeout(resolve, 10000));
         
@@ -170,7 +177,9 @@ async function buildInstagramHandleDatabase() {
     lastDatabaseUpdateTime = new Date();
     console.log(`Instagram handle database build complete! Processed ${totalProcessed} customers.`);
     console.log(`Found ${customersWithInstagram} customers with Instagram handles.`);
-    console.log(`First 5 handles in database: ${[...instagramHandleMap.keys()].slice(0, 5).join(', ')}`);
+    if (customersWithInstagram > 0) {
+      console.log(`First 5 handles in database: ${[...instagramHandleMap.keys()].slice(0, 5).join(', ')}`);
+    }
     
   } catch (error) {
     console.error('Error building Instagram handle database:', error);
