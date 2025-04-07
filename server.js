@@ -15,6 +15,7 @@ const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const rateLimit = require('express-rate-limit');
 const cookieParser = require('cookie-parser');
+const fs = require('fs');
 
 const app = express();
 
@@ -84,13 +85,86 @@ const INSTAGRAM_APP_SECRET = process.env.INSTAGRAM_APP_SECRET;
 
 // ---------------- Instagram Handle Database ----------------
 
+// File path for database persistence
+const INSTAGRAM_DB_FILE = path.join(__dirname, 'instagram_handle_database.json');
+
 // In-memory database of Instagram handles to customer IDs
 const instagramHandleMap = new Map();
 let lastDatabaseUpdateTime = null;
 let isDatabaseBuilding = false;
 
+// Function to save the Instagram handle database to a file
+function saveInstagramHandleDatabase() {
+  try {
+    const dbObject = {
+      lastUpdated: lastDatabaseUpdateTime,
+      handles: [...instagramHandleMap.entries()].map(([handle, customer]) => ({
+        handle,
+        customer
+      }))
+    };
+    
+    fs.writeFileSync(INSTAGRAM_DB_FILE, JSON.stringify(dbObject, null, 2));
+    console.log(`Instagram handle database saved to file: ${INSTAGRAM_DB_FILE}`);
+    console.log(`Contains ${instagramHandleMap.size} Instagram handles`);
+  } catch (error) {
+    console.error('Error saving Instagram handle database to file:', error);
+  }
+}
+
+// Function to load the Instagram handle database from a file
+function loadInstagramHandleDatabase() {
+  try {
+    if (!fs.existsSync(INSTAGRAM_DB_FILE)) {
+      console.log('No Instagram handle database file found. Will build from scratch.');
+      return false;
+    }
+    
+    // Check if file is empty
+    const stats = fs.statSync(INSTAGRAM_DB_FILE);
+    if (stats.size === 0) {
+      console.log('Instagram handle database file is empty. Will build from scratch.');
+      return false;
+    }
+    
+    const fileData = fs.readFileSync(INSTAGRAM_DB_FILE, 'utf8');
+    const dbObject = JSON.parse(fileData);
+    
+    // Clear existing data
+    instagramHandleMap.clear();
+    
+    // Load handles into map
+    dbObject.handles.forEach(item => {
+      instagramHandleMap.set(item.handle, item.customer);
+    });
+    
+    lastDatabaseUpdateTime = new Date(dbObject.lastUpdated);
+    
+    console.log(`Loaded Instagram handle database from file. Contains ${instagramHandleMap.size} handles.`);
+    console.log(`Database was last updated on: ${lastDatabaseUpdateTime}`);
+    
+    // Check if database is stale (older than 24 hours)
+    const isStale = (new Date() - lastDatabaseUpdateTime) > (24 * 60 * 60 * 1000);
+    if (isStale) {
+      console.log('Database is older than 24 hours. Will rebuild to ensure it\'s up to date.');
+      return false;
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Error loading Instagram handle database from file:', error);
+    return false;
+  }
+}
+
 // Function to build the Instagram handle database
 async function buildInstagramHandleDatabase() {
+  // First check if we can load from file
+  if (loadInstagramHandleDatabase()) {
+    console.log('Successfully loaded Instagram handle database from file. Skipping build.');
+    return;
+  }
+  
   if (isDatabaseBuilding) {
     console.log('Instagram database build already in progress');
     return;
@@ -155,6 +229,12 @@ async function buildInstagramHandleDatabase() {
         
         page++;
         
+        // Save database to file after each batch to ensure we don't lose progress
+        if (page % 5 === 0 && customersWithInstagram > 0) {
+          lastDatabaseUpdateTime = new Date();
+          saveInstagramHandleDatabase();
+        }
+        
         // Add rate limiting to avoid hitting Commerce7 API limits
         // Wait 5 seconds between batches to be much more gentle with the API
         await new Promise(resolve => setTimeout(resolve, 5000));
@@ -175,6 +255,10 @@ async function buildInstagramHandleDatabase() {
     }
     
     lastDatabaseUpdateTime = new Date();
+    
+    // Save final database to file
+    saveInstagramHandleDatabase();
+    
     console.log(`Instagram handle database build complete! Processed ${totalProcessed} customers.`);
     console.log(`Found ${customersWithInstagram} customers with Instagram handles.`);
     if (customersWithInstagram > 0) {
@@ -367,6 +451,10 @@ async function awardPointsForMention(instagramUsername, mentionCount = 1) {
           fullHandle: searchHandle,
           points: customer.loyalty?.points || 0
         });
+        
+        // Save the updated database to file
+        lastDatabaseUpdateTime = new Date();
+        saveInstagramHandleDatabase();
       }
     } else {
       console.log('Database is still building and customer not found. Try again later.');
@@ -503,6 +591,20 @@ app.use((req, res, next) => {
 });
 
 // ---------------- Endpoints ----------------
+
+// --- API endpoint to get the Instagram handle database file ---
+app.get('/api/get-instagram-database', checkAuth, (req, res) => {
+  try {
+    if (!fs.existsSync(INSTAGRAM_DB_FILE)) {
+      return res.status(404).json({ error: 'Instagram handle database file not found' });
+    }
+    
+    res.download(INSTAGRAM_DB_FILE, 'instagram_handle_database.json');
+  } catch (error) {
+    console.error('Error serving Instagram handle database file:', error);
+    res.status(500).json({ error: 'Error serving database file' });
+  }
+});
 
 // --- Login Endpoint (public) ---
 app.post('/auth/login', authLimiter, async (req, res) => {
