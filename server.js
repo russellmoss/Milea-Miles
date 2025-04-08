@@ -651,7 +651,7 @@ function checkAuth(req, res, next) {
 // ---------------- Global Protection ----------------
 
 // Define public paths (only login and the root static assets are public).
-const publicPaths = ['/auth/login', '/', '/create-account', '/create-account.html', '/webhook/instagram', '/test-instagram-mention', '/temp-get-instagram-database'];
+const publicPaths = ['/auth/login', '/', '/create-account', '/create-account.html', '/webhook/instagram', '/test-instagram-mention'];
 
 // All endpoints not matching the public paths will be protected.
 app.use((req, res, next) => {
@@ -671,22 +671,6 @@ app.get('/api/instagram-database-status', checkAuth, (req, res) => {
     lastUpdated: lastDatabaseUpdateTime,
     buildStatus: databaseBuildStatus
   });
-});
-
-// --- Temporary public endpoint to get the Instagram handle database file ---
-// TODO: REMOVE THIS ENDPOINT AFTER DOWNLOADING THE FILE FOR SECURITY
-app.get('/temp-get-instagram-database', (req, res) => {
-  try {
-    if (!fs.existsSync(INSTAGRAM_DB_FILE)) {
-      return res.status(404).json({ error: 'Instagram handle database file not found' });
-    }
-    
-    console.log('SECURITY NOTICE: Someone is downloading the Instagram database file via the public endpoint!');
-    res.download(INSTAGRAM_DB_FILE, 'instagram_handle_database.json');
-  } catch (error) {
-    console.error('Error serving Instagram handle database file:', error);
-    res.status(500).json({ error: 'Error serving database file' });
-  }
 });
 
 // --- API endpoint to get the Instagram handle database file ---
