@@ -375,8 +375,15 @@ async function updateInstagramHandleDatabase() {
     }
     
     const timeUntilNextUpdate = nextUpdate - now;
+    const hoursUntilUpdate = timeUntilNextUpdate / (1000 * 60 * 60);
+    
     console.log(`Scheduled next Instagram database rebuild for ${nextUpdate.toLocaleString()}`);
-    console.log(`(${Math.round(timeUntilNextUpdate / (1000 * 60 * 60))} hours from now)`);
+    console.log(`(${Math.round(hoursUntilUpdate)} hours from now)`);
+    
+    // Log more details to debug time calculation
+    console.log(`Current time: ${now.toLocaleString()}`);
+    console.log(`Target time: ${nextUpdate.toLocaleString()}`);
+    console.log(`Time difference in hours: ${hoursUntilUpdate.toFixed(2)}`);
     
     setTimeout(updateInstagramHandleDatabase, timeUntilNextUpdate);
   };

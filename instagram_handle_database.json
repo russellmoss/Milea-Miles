@@ -1,40 +1,59 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Milea Estate Embassy - Login</title>
-    <style>
-        body {background-color: #d8d1ae; font-family: 'Arial', sans-serif; margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; height: 100vh; }
-        .container {text-align: center; padding: 20px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); background-color: #fff; width: 400px; }
-
-        .logo {width: 80px; margin-bottom: 20px; }
-        h1 {color: #715100; font-size: 24px; margin-bottom: 20px; }
-
-        input[type="email"], input[type="password"] {width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 5px;  box-sizing:border-box; }
-        button {background-color: #715100; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; transition: all 0.2s cubic-bezier(0.455, 0.03, 0.515, 0.955);}
-        button:hover {background-color: #5e4300; }
-
-        .links {margin-top: 15px; }
-        .links a {color: #715100; text-decoration: none; font-size: 14px; margin: 0 10px; transition: all 0.2s cubic-bezier(0.455, 0.03, 0.515, 0.955);}
-        .links a:hover {text-decoration: underline; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <img src="https://i.imgur.com/qfTW5j0.png" alt="Milea Estate Logo" class="logo">
-        <h1>Welcome to Milea Miles</h1>
-        <form id="loginForm">
-            <input type="email" id="email" placeholder="Email" required>
-            <input type="password" id="password" placeholder="Password" required>
-            <button type="submit">Login</button>
-        </form>
-        <div class="links">
-            <a href="create_account.html">Create an Account</a> |
-            <a href="https://mileaestatevineyard.com/profile/forgot-password">Forgot Password</a>
-        </div>
-    </div>
-
-    <script type="text/javascript" src="/js/login.js"></script>
-</body>
-</html>
+{
+  "lastUpdated": "2025-04-08T14:46:06.290Z",
+  "handles": [
+    {
+      "handle": "paul.zweifel.9",
+      "customer": {
+        "id": "732b10b2-6adb-4da5-8aec-9ccfb0f7833a",
+        "email": "zweif1@aol.com",
+        "fullHandle": "Paul.zweifel.9",
+        "points": 8997
+      }
+    },
+    {
+      "handle": "@mich0615",
+      "customer": {
+        "id": "e57ee1b3-216d-4027-a0fe-ee1a491a1c27",
+        "email": "catchshark@aol.com",
+        "fullHandle": "@mich0615",
+        "points": 43990
+      }
+    },
+    {
+      "handle": "clmkruse",
+      "customer": {
+        "id": "b3d339e8-14e3-4492-84ec-8f7b84f47abd",
+        "email": "clmkruse@gmail.com",
+        "fullHandle": "clmkruse",
+        "points": 0
+      }
+    },
+    {
+      "handle": "eaganfamof5",
+      "customer": {
+        "id": "ced2758e-d99b-480e-b48c-e6854f203171",
+        "email": "josephineeagan@gmail.com",
+        "fullHandle": "eaganfamof5",
+        "points": 24198
+      }
+    },
+    {
+      "handle": "@testinginstagram",
+      "customer": {
+        "id": "41a3c9a4-0d1e-46fa-8711-f90c61e6a810",
+        "email": "lance@fillintheblank.co",
+        "fullHandle": "@testinginstagram",
+        "points": 180
+      }
+    },
+    {
+      "handle": "@jtesf",
+      "customer": {
+        "id": "ea83922a-d464-44bd-9342-33e9e3c53337",
+        "email": "jtester@gmail.com",
+        "fullHandle": "@jtesf",
+        "points": 0
+      }
+    }
+  ]
+}
