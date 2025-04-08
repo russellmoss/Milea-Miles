@@ -132,30 +132,57 @@ function loadInstagramHandleDatabase() {
       return false;
     }
     
-    const fileData = fs.readFileSync(INSTAGRAM_DB_FILE, 'utf8');
-    const dbObject = JSON.parse(fileData);
+    console.log(`Found Instagram database file at ${INSTAGRAM_DB_FILE} with size ${stats.size} bytes`);
     
-    // Clear existing data
-    instagramHandleMap.clear();
-    
-    // Load handles into map
-    dbObject.handles.forEach(item => {
-      instagramHandleMap.set(item.handle, item.customer);
-    });
-    
-    lastDatabaseUpdateTime = new Date(dbObject.lastUpdated);
-    
-    console.log(`Loaded Instagram handle database from file. Contains ${instagramHandleMap.size} handles.`);
-    console.log(`Database was last updated on: ${lastDatabaseUpdateTime}`);
-    
-    // Check if database is stale (older than 24 hours)
-    const isStale = (new Date() - lastDatabaseUpdateTime) > (24 * 60 * 60 * 1000);
-    if (isStale) {
-      console.log('Database is older than 24 hours. Will rebuild to ensure it\'s up to date.');
+    try {
+      const fileData = fs.readFileSync(INSTAGRAM_DB_FILE, 'utf8');
+      const dbObject = JSON.parse(fileData);
+      
+      // Clear existing data
+      instagramHandleMap.clear();
+      
+      // Load handles into map
+      if (dbObject.handles && Array.isArray(dbObject.handles)) {
+        dbObject.handles.forEach(item => {
+          if (item.handle && item.customer) {
+            instagramHandleMap.set(item.handle, item.customer);
+          }
+        });
+        
+        console.log(`Successfully loaded ${instagramHandleMap.size} handles into memory`);
+      } else {
+        console.error('Database file is missing the "handles" array property');
+        return false;
+      }
+      
+      if (dbObject.lastUpdated) {
+        lastDatabaseUpdateTime = new Date(dbObject.lastUpdated);
+        console.log(`Database was last updated on: ${lastDatabaseUpdateTime}`);
+      } else {
+        lastDatabaseUpdateTime = new Date();
+        console.log('No lastUpdated timestamp found, using current time');
+      }
+      
+      // Override stale check with environment variable if present
+      const forceUseFile = process.env.FORCE_USE_DB_FILE === 'true';
+      
+      // Make stale check more lenient - 7 days instead of 1
+      const isStale = (new Date() - lastDatabaseUpdateTime) > (7 * 24 * 60 * 60 * 1000);
+      
+      if (isStale && !forceUseFile) {
+        console.log(`Database is older than 7 days (last updated: ${lastDatabaseUpdateTime.toISOString()}). Will rebuild to ensure it's up to date.`);
+        return false;
+      }
+      
+      console.log(`Loaded Instagram handle database from file. Contains ${instagramHandleMap.size} handles.`);
+      databaseBuildStatus.currentProgress = "Loaded from file";
+      databaseBuildStatus.handlesFound = instagramHandleMap.size;
+      
+      return true;
+    } catch (parseError) {
+      console.error('Error parsing Instagram handle database file:', parseError);
       return false;
     }
-    
-    return true;
   } catch (error) {
     console.error('Error loading Instagram handle database from file:', error);
     return false;
@@ -251,8 +278,8 @@ async function buildInstagramHandleDatabase() {
         }
         
         // Add rate limiting to avoid hitting Commerce7 API limits
-        // Wait 5 seconds between batches to be much more gentle with the API
-        await new Promise(resolve => setTimeout(resolve, 5000));
+        // Wait 2 seconds between batches
+        await new Promise(resolve => setTimeout(resolve, 2000));
         
       } catch (error) {
         console.error(`Error fetching customer batch ${page}:`, error.message);
@@ -309,44 +336,36 @@ async function updateInstagramHandleDatabase() {
     }
     
     const timeUntilNextUpdate = nextUpdate - now;
-    console.log(`Scheduled next Instagram database update for ${nextUpdate.toLocaleString()}`);
+    console.log(`Scheduled next Instagram database rebuild for ${nextUpdate.toLocaleString()}`);
     console.log(`(${Math.round(timeUntilNextUpdate / (1000 * 60 * 60))} hours from now)`);
     
     setTimeout(updateInstagramHandleDatabase, timeUntilNextUpdate);
   };
   
-  // Check if a full rebuild is needed
-  const shouldRebuild = () => {
-    // If no last update time, definitely rebuild
-    if (!lastDatabaseUpdateTime) return true;
-    
-    // Check if it's been more than 24 hours
-    const daysSinceUpdate = (new Date() - lastDatabaseUpdateTime) / (24 * 60 * 60 * 1000);
-    
-    return daysSinceUpdate >= 1;
-  };
+  // Always rebuild the database at 2:00 AM
+  console.log('Starting daily rebuild of Instagram handle database...');
   
-  if (shouldRebuild()) {
-    console.log('Running daily update of Instagram handle database...');
-    
-    // Rebuild the whole database
-    await buildInstagramHandleDatabase();
-    
-    // Schedule next update
-    scheduleNextUpdate();
-  } else {
-    console.log('Instagram database was updated recently, skipping update');
-    
-    // Still schedule next update at 2:00 AM
-    scheduleNextUpdate();
-  }
+  // Rebuild the whole database
+  await buildInstagramHandleDatabase();
+  
+  // Schedule next update
+  scheduleNextUpdate();
 }
 
 // Build the database when the server starts
-buildInstagramHandleDatabase().then(() => {
-  // Schedule first update for 2:00 AM
+console.log('Checking for existing Instagram handle database file...');
+if (loadInstagramHandleDatabase()) {
+  console.log('Successfully loaded Instagram handle database from file. Skipping initial build.');
+  
+  // Still schedule the nightly update check
   updateInstagramHandleDatabase();
-});
+} else {
+  console.log('No valid Instagram handle database file found or file is too old. Will build now...');
+  buildInstagramHandleDatabase().then(() => {
+    // Schedule first update check for 2:00 AM
+    updateInstagramHandleDatabase();
+  });
+}
 
 // ---------------- Helper Functions ----------------
 
