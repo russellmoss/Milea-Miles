@@ -136,6 +136,22 @@ function loadInstagramHandleDatabase() {
     
     try {
       const fileData = fs.readFileSync(INSTAGRAM_DB_FILE, 'utf8');
+      
+      // Quick validation check before parsing
+      if (fileData.trim().startsWith('<') || !fileData.trim().startsWith('{')) {
+        console.error('Database file appears to be corrupted (contains HTML or non-JSON content)');
+        
+        // Log a small preview of the file content to help diagnose the issue
+        console.error(`File content preview: ${fileData.substring(0, 100)}...`);
+        
+        // Rename the corrupt file rather than deleting it
+        const backupPath = `${INSTAGRAM_DB_FILE}.corrupt.${Date.now()}`;
+        fs.renameSync(INSTAGRAM_DB_FILE, backupPath);
+        console.log(`Renamed corrupt database file to ${backupPath}`);
+        
+        return false;
+      }
+      
       const dbObject = JSON.parse(fileData);
       
       // Clear existing data
@@ -181,6 +197,29 @@ function loadInstagramHandleDatabase() {
       return true;
     } catch (parseError) {
       console.error('Error parsing Instagram handle database file:', parseError);
+      
+      try {
+        // Read raw file content to examine what's wrong
+        const fileContent = fs.readFileSync(INSTAGRAM_DB_FILE, 'utf8');
+        const preview = fileContent.length > 200 ? fileContent.substring(0, 200) + '...' : fileContent;
+        console.error(`File content appears to be invalid. First 200 chars: ${preview}`);
+        
+        // Rename the corrupt file instead of deleting it outright
+        const backupPath = `${INSTAGRAM_DB_FILE}.corrupt.${Date.now()}`;
+        fs.renameSync(INSTAGRAM_DB_FILE, backupPath);
+        console.log(`Renamed corrupt database file to ${backupPath} for later inspection`);
+      } catch (backupError) {
+        console.error('Failed to backup corrupt file:', backupError);
+        
+        // If rename fails, try to delete the file
+        try {
+          fs.unlinkSync(INSTAGRAM_DB_FILE);
+          console.log(`Deleted corrupt database file: ${INSTAGRAM_DB_FILE}`);
+        } catch (deleteError) {
+          console.error('Failed to delete corrupt file:', deleteError);
+        }
+      }
+      
       return false;
     }
   } catch (error) {
