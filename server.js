@@ -1506,23 +1506,90 @@ app.post('/webhook/instagram', async (req, res) => {
     
     // Process each entry (there might be multiple)
     for (const item of entry) {
-      // For comments field, look for mentions in comments or captions
-      if (item.changes && item.changes[0] && item.changes[0].field === 'comments') {
-        const change = item.changes[0].value;
+      // Debug the structure of the item to help understand what we're receiving
+      console.log('Processing webhook entry:', JSON.stringify(item, null, 2));
+      
+      if (item.changes && item.changes[0]) {
+        const change = item.changes[0];
+        const field = change.field;
+        const value = change.value;
         
-        // Could be a post caption or a comment
-        const text = change.text || change.caption || change.message || '';
-        const username = change.from?.username || change.username;
+        console.log(`Processing ${field} webhook with value:`, JSON.stringify(value, null, 2));
         
-        if (text && username && text.includes('@mileaestatewinery')) {
-          console.log(`Processing mention from ${username}`);
-          
-          try {
-            // Award points for the mention
-            await awardPointsForMention(username);
-          } catch (error) {
-            console.error(`Error awarding points: ${error.message}`);
+        // Common function to process mentions
+        const processMention = (text, username, mentionType) => {
+          if (text && username && text.includes('@mileaestatewinery')) {
+            console.log(`Processing ${mentionType} mention from ${username}`);
+            
+            try {
+              // Award points for the mention
+              awardPointsForMention(username);
+            } catch (error) {
+              console.error(`Error awarding points: ${error.message}`);
+            }
           }
+        };
+        
+        switch (field) {
+          case 'comments':
+            // Process comments (existing logic)
+            const commentText = value.text || value.caption || value.message || '';
+            const commentUser = value.from?.username || value.username;
+            processMention(commentText, commentUser, 'comment');
+            break;
+            
+          case 'mentions':
+            // Process direct mentions
+            const mentionUser = value.username || value.from?.username;
+            // For mentions, we don't need to check the text since being mentioned is the trigger
+            if (mentionUser) {
+              console.log(`Processing direct mention from ${mentionUser}`);
+              try {
+                awardPointsForMention(mentionUser);
+              } catch (error) {
+                console.error(`Error awarding points: ${error.message}`);
+              }
+            }
+            break;
+            
+          case 'stories':
+            // Process story mentions
+            const storyUser = value.username || value.from?.username;
+            const storyText = value.caption || value.text || '';
+            processMention(storyText, storyUser, 'story');
+            break;
+            
+          case 'media':
+            // Process media posts
+            const mediaUser = value.username || value.from?.username;
+            const mediaText = value.caption || value.text || '';
+            processMention(mediaText, mediaUser, 'post');
+            break;
+            
+          default:
+            console.log(`Unhandled webhook field type: ${field}`);
+            // Log the structure to help us understand what we received
+            console.log('Webhook value structure:', JSON.stringify(value, null, 2));
+        }
+      } else if (item.messaging_product === 'instagram' && item.object === 'instagram_business_account') {
+        // Handle Instagram business account events
+        if (item.entry && Array.isArray(item.entry)) {
+          item.entry.forEach(entry => {
+            if (entry.messaging && Array.isArray(entry.messaging)) {
+              entry.messaging.forEach(message => {
+                if (message.message && message.message.text) {
+                  const messageText = message.message.text;
+                  const sender = message.sender ? message.sender.id : null;
+                  
+                  if (sender && messageText.includes('@mileaestatewinery')) {
+                    console.log(`Processing direct message mention from user ID: ${sender}`);
+                    // Note: For DMs we might need to look up the username from the ID
+                    // For now, we'll just log it
+                  }
+                }
+              });
+            }
+          });
         }
       }
     }
