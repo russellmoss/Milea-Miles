@@ -365,9 +365,10 @@ async function updateInstagramHandleDatabase() {
   const scheduleNextUpdate = () => {
     const now = new Date();
     
-    // Create a date object for 2:00 AM CST (8:00 AM UTC)
+    // Create a date object for 2:00 AM CST (always 8:00 AM UTC since CST is UTC-6)
     const targetTime = new Date();
-    targetTime.setUTCHours(8, 0, 0, 0); // 8:00 AM UTC = 2:00 AM CST
+    // Always set to 8:00 AM UTC which is 2:00 AM CST (UTC-6)
+    targetTime.setUTCHours(8, 0, 0, 0);
     
     // If it's already past 2:00 AM CST today, schedule for tomorrow
     if (now >= targetTime) {
@@ -377,14 +378,20 @@ async function updateInstagramHandleDatabase() {
     const timeUntilNextUpdate = targetTime - now;
     const hoursUntilUpdate = timeUntilNextUpdate / (1000 * 60 * 60);
     
-    console.log(`Scheduled next Instagram database rebuild for ${targetTime.toLocaleString()} UTC`);
-    console.log(`(${Math.round(hoursUntilUpdate)} hours from now)`);
+    // Convert to Central Time for display purposes
+    const targetCST = new Date(targetTime);
+    // Adjust 6 hours back from UTC to get CST regardless of DST
+    targetCST.setHours(targetCST.getHours() - 6);
     
-    // Log more details to debug time calculation
-    console.log(`Current time: ${now.toLocaleString()} (${now.toUTCString()})`);
-    console.log(`Target time: ${targetTime.toLocaleString()} (${targetTime.toUTCString()})`);
-    console.log(`Target time in CST: 2:00 AM Central Standard Time`);
-    console.log(`Time difference in hours: ${hoursUntilUpdate.toFixed(2)}`);
+    console.log(`Scheduled next Instagram database rebuild for ${targetTime.toUTCString()}`);
+    console.log(`(Exactly ${hoursUntilUpdate.toFixed(2)} hours from now)`);
+    
+    // Log more details to debug time calculation with clearer timezone info
+    console.log(`Current UTC time: ${now.toUTCString()}`);
+    console.log(`Current server time: ${now.toString()}`);
+    console.log(`Target UTC time: ${targetTime.toUTCString()} (8:00 AM UTC)`);
+    console.log(`Target CST time: 2:00 AM Central Standard Time (6 hours behind UTC)`);
+    console.log(`Time until rebuild: ${Math.floor(hoursUntilUpdate)} hours and ${Math.round((hoursUntilUpdate % 1) * 60)} minutes`);
     
     setTimeout(updateInstagramHandleDatabase, timeUntilNextUpdate);
   };
