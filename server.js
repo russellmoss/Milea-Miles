@@ -361,16 +361,16 @@ async function buildInstagramHandleDatabase() {
 
 // Function to update the Instagram handle database daily
 async function updateInstagramHandleDatabase() {
-  // Schedule next update for 2:00 AM Central Standard Time (CST)
+  // Schedule next update for 2:00 AM Central Time (either CST or CDT)
   const scheduleNextUpdate = () => {
     const now = new Date();
     
-    // Create a date object for 2:00 AM CST (always 8:00 AM UTC since CST is UTC-6)
+    // Create a date object for 2:00 AM Central Time
+    // 7:00 AM UTC will be 2:00 AM Central time regardless of DST
     const targetTime = new Date();
-    // Always set to 8:00 AM UTC which is 2:00 AM CST (UTC-6)
-    targetTime.setUTCHours(8, 0, 0, 0);
+    targetTime.setUTCHours(7, 0, 0, 0);
     
-    // If it's already past 2:00 AM CST today, schedule for tomorrow
+    // If it's already past 2:00 AM Central time today, schedule for tomorrow
     if (now >= targetTime) {
       targetTime.setUTCDate(targetTime.getUTCDate() + 1);
     }
@@ -378,10 +378,15 @@ async function updateInstagramHandleDatabase() {
     const timeUntilNextUpdate = targetTime - now;
     const hoursUntilUpdate = timeUntilNextUpdate / (1000 * 60 * 60);
     
+    // Calculate the exact hours and minutes for display
+    const hoursUntil = Math.floor(hoursUntilUpdate);
+    const minutesUntil = Math.round((hoursUntilUpdate - hoursUntil) * 60);
+    
     // Convert to Central Time for display purposes
-    const targetCST = new Date(targetTime);
-    // Adjust 6 hours back from UTC to get CST regardless of DST
-    targetCST.setHours(targetCST.getHours() - 6);
+    const targetCentral = new Date(targetTime);
+    // Get the actual timezone offset from the system
+    const offsetHours = now.getTimezoneOffset() / 60;
+    const centralTimezoneName = offsetHours === 5 ? "CDT" : "CST";
     
     console.log(`Scheduled next Instagram database rebuild for ${targetTime.toUTCString()}`);
     console.log(`(Exactly ${hoursUntilUpdate.toFixed(2)} hours from now)`);
@@ -389,14 +394,14 @@ async function updateInstagramHandleDatabase() {
     // Log more details to debug time calculation with clearer timezone info
     console.log(`Current UTC time: ${now.toUTCString()}`);
     console.log(`Current server time: ${now.toString()}`);
-    console.log(`Target UTC time: ${targetTime.toUTCString()} (8:00 AM UTC)`);
-    console.log(`Target CST time: 2:00 AM Central Standard Time (6 hours behind UTC)`);
-    console.log(`Time until rebuild: ${Math.floor(hoursUntilUpdate)} hours and ${Math.round((hoursUntilUpdate % 1) * 60)} minutes`);
+    console.log(`Target UTC time: ${targetTime.toUTCString()} (7:00 AM UTC)`);
+    console.log(`Target Central time: 2:00 AM Central ${centralTimezoneName} (${Math.abs(offsetHours)} hours behind UTC)`);
+    console.log(`Time until rebuild: ${hoursUntil} hours and ${minutesUntil} minutes`);
     
     setTimeout(updateInstagramHandleDatabase, timeUntilNextUpdate);
   };
   
-  // Always rebuild the database at 2:00 AM CST
+  // Always rebuild the database at 2:00 AM Central time
   console.log('Starting daily rebuild of Instagram handle database...');
   
   // Rebuild the whole database
