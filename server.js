@@ -735,7 +735,7 @@ function checkAuth(req, res, next) {
 // ---------------- Global Protection ----------------
 
 // Define public paths (only login and the root static assets are public).
-const publicPaths = ['/auth/login', '/', '/create-account', '/create-account.html', '/webhook/instagram', '/test-instagram-mention', '/test-instagram-webhook'];
+const publicPaths = ['/auth/login', '/', '/create-account', '/create-account.html', '/webhook/instagram'];
 
 // All endpoints not matching the public paths will be protected.
 app.use((req, res, next) => {
@@ -1759,126 +1759,6 @@ app.post('/webhook/instagram', async (req, res) => {
     }
   } catch (error) {
     console.error('❌ Error processing webhook:', error);
-  }
-});
-
-// --- Test endpoint for Instagram mention functionality ---
-app.get('/test-instagram-mention', async (req, res) => {
-  const username = req.query.username || 'test_user';
-  const mentionCount = parseInt(req.query.count || '1', 10);
-  const mentionType = req.query.type || 'comment'; // Add support for different mention types
-  
-  console.log(`Testing Instagram ${mentionType} mention for user: ${username}, count: ${mentionCount}`);
-  
-  try {
-    await awardPointsForMention(username, mentionCount);
-    res.send(`<h1>Test Complete</h1>
-              <p>Awarded ${mentionCount * 40} points to Instagram user: ${username} for ${mentionType} mention</p>
-              <p>Check server logs for details.</p>`);
-  } catch (error) {
-    console.error('Test error:', error);
-    res.status(500).send(`<h1>Error</h1><p>${error.message}</p>`);
-  }
-});
-
-// --- Test simulated Instagram webhook payload ---
-app.get('/test-instagram-webhook', async (req, res) => {
-  const username = req.query.username || 'test_user';
-  const type = req.query.type || 'comment'; // story, post, or comment
-  
-  console.log(`Simulating Instagram ${type} webhook for user: ${username}`);
-  
-  // Create a simulated webhook payload based on the type
-  let simulatedPayload;
-  
-  switch(type) {
-    case 'story':
-      simulatedPayload = {
-        entry: [{
-          changes: [{
-            field: 'stories',
-            value: {
-              username: username,
-              caption: `Check out @mileaestatewinery's amazing wines!`,
-              mentions: [
-                { username: 'mileaestatewinery' }
-              ]
-            }
-          }]
-        }]
-      };
-      break;
-      
-    case 'post':
-      simulatedPayload = {
-        entry: [{
-          changes: [{
-            field: 'media',
-            value: {
-              username: username,
-              caption: `Loving the wines from @mileaestatewinery today!`,
-              mentions: [
-                { username: 'mileaestatewinery' }
-              ]
-            }
-          }]
-        }]
-      };
-      break;
-      
-    default: // comment
-      simulatedPayload = {
-        entry: [{
-          changes: [{
-            field: 'comments',
-            value: {
-              username: username,
-              text: `@mileaestatewinery has amazing wines!`
-            }
-          }]
-        }]
-      };
-  }
-  
-  // Process the simulated payload using our webhook handler
-  try {
-    // Create a request-like object to pass to our handler
-    const mockReq = {
-      body: simulatedPayload,
-      query: { test: 'true' }, // Mark as a test request
-      headers: {}
-    };
-    
-    // Create a response-like object
-    const mockRes = {
-      status: (code) => {
-        console.log(`Response status code: ${code}`);
-        return { send: (msg) => console.log(`Response message: ${msg}`) };
-      }
-    };
-    
-    // Call our webhook handler directly with the mock objects
-    const webhookRoute = app._router.stack
-      .filter(layer => layer.route && layer.route.path === '/webhook/instagram')
-      .map(layer => layer.route.stack[0].handle)[0];
-    
-    if (webhookRoute) {
-      await webhookRoute(mockReq, mockRes);
-      
-      // Send success response
-      res.send(`
-        <h1>Webhook Test Complete</h1>
-        <h2>Simulated ${type} mention from ${username}</h2>
-        <pre>${JSON.stringify(simulatedPayload, null, 2)}</pre>
-        <p>Check server logs for details of how the webhook was processed.</p>
-        <p><a href="/test-instagram-mention?username=${username}&type=${type}">Award points directly</a></p>
-      `);
-    } else {
-      throw new Error('Could not find webhook handler route');
-    }
-  } catch (error) {
-    console.error('Webhook simulation error:', error);
-    res.status(500).send(`<h1>Error</h1><p>${error.message}</p>`);
   }
 });
 
