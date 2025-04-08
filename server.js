@@ -729,7 +729,7 @@ function checkAuth(req, res, next) {
 // ---------------- Global Protection ----------------
 
 // Define public paths (only login and the root static assets are public).
-const publicPaths = ['/auth/login', '/', '/create-account', '/create-account.html', '/webhook/instagram', '/test-instagram-mention'];
+const publicPaths = ['/auth/login', '/', '/create-account', '/create-account.html', '/webhook/instagram', '/test-instagram-mention', '/test-instagram-webhook'];
 
 // All endpoints not matching the public paths will be protected.
 app.use((req, res, next) => {
@@ -1495,10 +1495,10 @@ app.post('/webhook/instagram', async (req, res) => {
   res.status(200).send('EVENT_RECEIVED');
 
   try {
-    // Log the incoming webhook data for debugging
-    console.log('Instagram webhook received:');
+    // Enhanced webhook logging to better understand payload structure
+    console.log('📱 Instagram webhook received:');
     console.log('Headers:', JSON.stringify(req.headers, null, 2));
-    console.log('Body:', JSON.stringify(req.body, null, 2));
+    console.log('📦 Full payload body:', JSON.stringify(req.body, null, 2));
     
     // Check if this is a test event
     const isTestEvent = req.query.test === 'true' || (req.body && req.body.test === true);
@@ -1506,45 +1506,58 @@ app.post('/webhook/instagram', async (req, res) => {
     // For non-test events, verify signature and exit if invalid
     if (!isTestEvent) {
       if (!verifyWebhookSignature(req)) {
-        console.error('Invalid webhook signature. Rejecting non-test event.');
+        console.error('❌ Invalid webhook signature. Rejecting non-test event.');
         return; // Exit early - don't process events with invalid signatures
       }
-      console.log('Signature verified successfully. Processing real Instagram event.');
+      console.log('✅ Signature verified successfully. Processing real Instagram event.');
     } else {
-      console.log('Processing test event (bypassing signature verification).');
+      console.log('🧪 Processing test event (bypassing signature verification).');
     }
     
     const { entry } = req.body;
     
     // Process each entry (there might be multiple)
     for (const item of entry) {
-      // Debug the structure of the item to help understand what we're receiving
-      console.log('Processing webhook entry:', JSON.stringify(item, null, 2));
+      // Enhanced debug logging of the specific entry structure
+      console.log('🔍 Processing webhook entry structure:', JSON.stringify(item, null, 2));
       
       if (item.changes && item.changes[0]) {
         const change = item.changes[0];
         const field = change.field;
         const value = change.value;
         
-        console.log(`Processing ${field} webhook with value:`, JSON.stringify(value, null, 2));
+        console.log(`📣 Received Instagram ${field} webhook with data:`, JSON.stringify(value, null, 2));
         
         // Common function to process mentions
         const processMention = (text, username, mentionType) => {
+          // Enhanced logging for debugging mention detection
+          console.log(`🔎 Checking for mentions in ${mentionType}...`);
+          console.log(`Text: "${text}", Username: ${username}`);
+          
           if (text && username && text.includes('@mileaestatewinery')) {
-            console.log(`Processing ${mentionType} mention from ${username}`);
+            console.log(`✨ Found @mileaestatewinery mention in ${mentionType} from ${username}`);
             
             try {
               // Award points for the mention
               awardPointsForMention(username);
             } catch (error) {
-              console.error(`Error awarding points: ${error.message}`);
+              console.error(`❌ Error awarding points: ${error.message}`);
             }
+          } else {
+            // Log why we didn't process this as a mention
+            if (!text) console.log(`⚠️ No text content in ${mentionType}`);
+            if (!username) console.log(`⚠️ No username found in ${mentionType}`);
+            if (text && !text.includes('@mileaestatewinery')) console.log(`⚠️ No mention of @mileaestatewinery in ${mentionType} text`);
           }
         };
+        
+        // Enhanced logging before switch statement
+        console.log(`🔄 Processing webhook field type: ${field}`);
         
         switch (field) {
           case 'comments':
             // Process comments (existing logic)
+            console.log('👉 Processing a comment webhook');
             const commentText = value.text || value.caption || value.message || '';
             const commentUser = value.from?.username || value.username;
             processMention(commentText, commentUser, 'comment');
@@ -1552,39 +1565,93 @@ app.post('/webhook/instagram', async (req, res) => {
             
           case 'mentions':
             // Process direct mentions
+            console.log('👉 Processing a direct mention webhook');
             const mentionUser = value.username || value.from?.username;
             // For mentions, we don't need to check the text since being mentioned is the trigger
             if (mentionUser) {
-              console.log(`Processing direct mention from ${mentionUser}`);
+              console.log(`💬 Processing direct mention from ${mentionUser}`);
               try {
                 awardPointsForMention(mentionUser);
               } catch (error) {
-                console.error(`Error awarding points: ${error.message}`);
+                console.error(`❌ Error awarding points: ${error.message}`);
               }
             }
             break;
             
           case 'stories':
-            // Process story mentions
+            // Process story mentions with enhanced logging
+            console.log('👉 Processing a story webhook');
             const storyUser = value.username || value.from?.username;
             const storyText = value.caption || value.text || '';
+            
+            // For stories, we might need to look at mentions array as well
+            if (value.mentions && Array.isArray(value.mentions)) {
+              console.log('📚 Story contains mentions array with:', value.mentions.length, 'mentions');
+              
+              // Check if our account is mentioned in the mentions array
+              const mentionsUs = value.mentions.some(mention => 
+                mention.username && mention.username.toLowerCase() === 'mileaestatewinery');
+              
+              if (mentionsUs && storyUser) {
+                console.log(`🎯 Our account found in story mentions array from ${storyUser}`);
+                awardPointsForMention(storyUser);
+                break; // Exit after processing to avoid double points
+              }
+            }
+            
+            // Process the text as well to catch text mentions
             processMention(storyText, storyUser, 'story');
             break;
             
           case 'media':
-            // Process media posts
+            // Process media posts with enhanced logging
+            console.log('👉 Processing a media post webhook');
             const mediaUser = value.username || value.from?.username;
             const mediaText = value.caption || value.text || '';
+            
+            // For posts, we might need to look at mentions array as well
+            if (value.mentions && Array.isArray(value.mentions)) {
+              console.log('📚 Post contains mentions array with:', value.mentions.length, 'mentions');
+              
+              // Check if our account is mentioned in the mentions array
+              const mentionsUs = value.mentions.some(mention => 
+                mention.username && mention.username.toLowerCase() === 'mileaestatewinery');
+              
+              if (mentionsUs && mediaUser) {
+                console.log(`🎯 Our account found in post mentions array from ${mediaUser}`);
+                awardPointsForMention(mediaUser);
+                break; // Exit after processing to avoid double points
+              }
+            }
+            
+            // Process the caption as well to catch text mentions
             processMention(mediaText, mediaUser, 'post');
             break;
             
           default:
-            console.log(`Unhandled webhook field type: ${field}`);
-            // Log the structure to help us understand what we received
-            console.log('Webhook value structure:', JSON.stringify(value, null, 2));
+            console.log(`⚠️ Unhandled webhook field type: ${field}`);
+            // Enhanced logging for unknown field types to help us understand what we received
+            console.log('📄 Full webhook value structure:', JSON.stringify(value, null, 2));
+            
+            // Try to detect any mention-like patterns in unknown webhook types
+            if (value) {
+              // Look for common fields that might contain usernames
+              const possibleUsername = value.username || value.from?.username || 
+                                      value.user?.username || value.actor?.username;
+              
+              // Look for common fields that might contain text
+              const possibleText = value.text || value.caption || value.message || 
+                                  value.content || value.description;
+              
+              if (possibleUsername && possibleText && possibleText.includes('@mileaestatewinery')) {
+                console.log(`💡 Found potential mention in unhandled webhook type from: ${possibleUsername}`);
+                awardPointsForMention(possibleUsername);
+              }
+            }
         }
       } else if (item.messaging_product === 'instagram' && item.object === 'instagram_business_account') {
         // Handle Instagram business account events
+        console.log('👥 Processing Instagram business account event');
         if (item.entry && Array.isArray(item.entry)) {
           item.entry.forEach(entry => {
             if (entry.messaging && Array.isArray(entry.messaging)) {
@@ -1593,10 +1660,12 @@ app.post('/webhook/instagram', async (req, res) => {
                   const messageText = message.message.text;
                   const sender = message.sender ? message.sender.id : null;
                   
+                  console.log(`📩 Direct message received: "${messageText}" from ID: ${sender}`);
+                  
                   if (sender && messageText.includes('@mileaestatewinery')) {
-                    console.log(`Processing direct message mention from user ID: ${sender}`);
-                    // Note: For DMs we might need to look up the username from the ID
-                    // For now, we'll just log it
+                    console.log(`📥 Processing direct message mention from user ID: ${sender}`);
+                    // For DMs we would need to look up the username from the ID
+                    // This would require an additional API call to the Instagram Graph API
                   }
                 }
               });
@@ -1606,7 +1675,7 @@ app.post('/webhook/instagram', async (req, res) => {
       }
     }
   } catch (error) {
-    console.error('Error processing webhook:', error);
+    console.error('❌ Error processing webhook:', error);
   }
 });
 
@@ -1614,16 +1683,118 @@ app.post('/webhook/instagram', async (req, res) => {
 app.get('/test-instagram-mention', async (req, res) => {
   const username = req.query.username || 'test_user';
   const mentionCount = parseInt(req.query.count || '1', 10);
+  const mentionType = req.query.type || 'comment'; // Add support for different mention types
   
-  console.log(`Testing Instagram mention for user: ${username}, count: ${mentionCount}`);
+  console.log(`Testing Instagram ${mentionType} mention for user: ${username}, count: ${mentionCount}`);
   
   try {
     await awardPointsForMention(username, mentionCount);
     res.send(`<h1>Test Complete</h1>
-              <p>Awarded ${mentionCount * 40} points to Instagram user: ${username}</p>
+              <p>Awarded ${mentionCount * 40} points to Instagram user: ${username} for ${mentionType} mention</p>
               <p>Check server logs for details.</p>`);
   } catch (error) {
     console.error('Test error:', error);
+    res.status(500).send(`<h1>Error</h1><p>${error.message}</p>`);
+  }
+});
+
+// --- Test simulated Instagram webhook payload ---
+app.get('/test-instagram-webhook', async (req, res) => {
+  const username = req.query.username || 'test_user';
+  const type = req.query.type || 'comment'; // story, post, or comment
+  
+  console.log(`Simulating Instagram ${type} webhook for user: ${username}`);
+  
+  // Create a simulated webhook payload based on the type
+  let simulatedPayload;
+  
+  switch(type) {
+    case 'story':
+      simulatedPayload = {
+        entry: [{
+          changes: [{
+            field: 'stories',
+            value: {
+              username: username,
+              caption: `Check out @mileaestatewinery's amazing wines!`,
+              mentions: [
+                { username: 'mileaestatewinery' }
+              ]
+            }
+          }]
+        }]
+      };
+      break;
+      
+    case 'post':
+      simulatedPayload = {
+        entry: [{
+          changes: [{
+            field: 'media',
+            value: {
+              username: username,
+              caption: `Loving the wines from @mileaestatewinery today!`,
+              mentions: [
+                { username: 'mileaestatewinery' }
+              ]
+            }
+          }]
+        }]
+      };
+      break;
+      
+    default: // comment
+      simulatedPayload = {
+        entry: [{
+          changes: [{
+            field: 'comments',
+            value: {
+              username: username,
+              text: `@mileaestatewinery has amazing wines!`
+            }
+          }]
+        }]
+      };
+  }
+  
+  // Process the simulated payload using our webhook handler
+  try {
+    // Create a request-like object to pass to our handler
+    const mockReq = {
+      body: simulatedPayload,
+      query: { test: 'true' }, // Mark as a test request
+      headers: {}
+    };
+    
+    // Create a response-like object
+    const mockRes = {
+      status: (code) => {
+        console.log(`Response status code: ${code}`);
+        return { send: (msg) => console.log(`Response message: ${msg}`) };
+      }
+    };
+    
+    // Call our webhook handler directly with the mock objects
+    const webhookRoute = app._router.stack
+      .filter(layer => layer.route && layer.route.path === '/webhook/instagram')
+      .map(layer => layer.route.stack[0].handle)[0];
+    
+    if (webhookRoute) {
+      await webhookRoute(mockReq, mockRes);
+      
+      // Send success response
+      res.send(`
+        <h1>Webhook Test Complete</h1>
+        <h2>Simulated ${type} mention from ${username}</h2>
+        <pre>${JSON.stringify(simulatedPayload, null, 2)}</pre>
+        <p>Check server logs for details of how the webhook was processed.</p>
+        <p><a href="/test-instagram-mention?username=${username}&type=${type}">Award points directly</a></p>
+      `);
+    } else {
+      throw new Error('Could not find webhook handler route');
+    }
+  } catch (error) {
+    console.error('Webhook simulation error:', error);
     res.status(500).send(`<h1>Error</h1><p>${error.message}</p>`);
   }
 });
@@ -1632,3 +1803,27 @@ app.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
 });
 //test
+
+// ---------------- Instagram Webhook Configuration ----------------
+// 
+// To properly capture Instagram mentions in stories and posts, you need to subscribe to the 
+// following webhook topics in the Facebook Developer Portal:
+//
+// 1. instagram_mentions - For all mentions across Instagram
+// 2. instagram_comments - For comments containing your handle
+// 3. instagram_media - For posts that mention your handle
+// 4. instagram_stories - For stories that mention your handle
+//
+// Instructions for setting up webhooks:
+// 1. Go to https://developers.facebook.com
+// 2. Select your app
+// 3. Navigate to Products > Webhooks
+// 4. Click "Instagram" 
+// 5. Add a subscription for each topic listed above, using:
+//    - Callback URL: https://yourdomain.com/webhook/instagram
+//    - Verify token: The value of WEBHOOK_VERIFY_TOKEN in your .env file
+// 
+// Note: Your Instagram Business Account must be connected to the app and have 
+// proper permissions for these webhook topics to deliver data.
+//
+// ---------------- Environment Variables ----------------
