@@ -361,34 +361,35 @@ async function buildInstagramHandleDatabase() {
 
 // Function to update the Instagram handle database daily
 async function updateInstagramHandleDatabase() {
-  // Schedule next update for 2:00 AM
+  // Schedule next update for 2:00 AM Central Standard Time (CST)
   const scheduleNextUpdate = () => {
     const now = new Date();
+    
+    // Create a date object for 2:00 AM CST (8:00 AM UTC)
     const nextUpdate = new Date();
+    nextUpdate.setUTCHours(8, 0, 0, 0); // 8:00 AM UTC = 2:00 AM CST
     
-    // Set time to 2:00 AM
-    nextUpdate.setHours(2, 0, 0, 0);
-    
-    // If it's already past 2:00 AM, schedule for tomorrow
+    // If it's already past 2:00 AM CST today, schedule for tomorrow
     if (now > nextUpdate) {
-      nextUpdate.setDate(nextUpdate.getDate() + 1);
+      nextUpdate.setUTCDate(nextUpdate.getUTCDate() + 1);
     }
     
     const timeUntilNextUpdate = nextUpdate - now;
     const hoursUntilUpdate = timeUntilNextUpdate / (1000 * 60 * 60);
     
-    console.log(`Scheduled next Instagram database rebuild for ${nextUpdate.toLocaleString()}`);
+    console.log(`Scheduled next Instagram database rebuild for ${nextUpdate.toLocaleString()} UTC`);
     console.log(`(${Math.round(hoursUntilUpdate)} hours from now)`);
     
     // Log more details to debug time calculation
-    console.log(`Current time: ${now.toLocaleString()}`);
-    console.log(`Target time: ${nextUpdate.toLocaleString()}`);
+    console.log(`Current time: ${now.toLocaleString()} (${now.toUTCString()})`);
+    console.log(`Target time: ${nextUpdate.toLocaleString()} (${nextUpdate.toUTCString()})`);
+    console.log(`Target time in CST: 2:00 AM Central Standard Time`);
     console.log(`Time difference in hours: ${hoursUntilUpdate.toFixed(2)}`);
     
     setTimeout(updateInstagramHandleDatabase, timeUntilNextUpdate);
   };
   
-  // Always rebuild the database at 2:00 AM
+  // Always rebuild the database at 2:00 AM CST
   console.log('Starting daily rebuild of Instagram handle database...');
   
   // Rebuild the whole database
