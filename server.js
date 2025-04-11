@@ -360,7 +360,7 @@ async function buildInstagramHandleDatabase() {
 }
 
 // Function to update the Instagram handle database daily
-async function updateInstagramHandleDatabase() {
+async function updateInstagramHandleDatabase(skipRebuildOnFirstRun = true) {
   // Schedule next update for 2:00 AM Central Time (either CST or CDT)
   const scheduleNextUpdate = () => {
     const now = new Date();
@@ -368,7 +368,7 @@ async function updateInstagramHandleDatabase() {
     // Create a date object for 2:00 AM Central Time
     // 7:00 AM UTC will be 2:00 AM Central time regardless of DST
     const targetTime = new Date();
-    targetTime.setUTCHours(7, 0, 0, 0);
+    targetTime.setUTCHours(17, 20, 0, 0);
     
     // If it's already past 2:00 AM Central time today, schedule for tomorrow
     if (now >= targetTime) {
@@ -398,10 +398,18 @@ async function updateInstagramHandleDatabase() {
     console.log(`Target Central time: 2:00 AM Central ${centralTimezoneName} (${Math.abs(offsetHours)} hours behind UTC)`);
     console.log(`Time until rebuild: ${hoursUntil} hours and ${minutesUntil} minutes`);
     
-    setTimeout(updateInstagramHandleDatabase, timeUntilNextUpdate);
+    // Schedule the NEXT update with skipRebuildOnFirstRun = false to ensure it will rebuild
+    setTimeout(() => updateInstagramHandleDatabase(false), timeUntilNextUpdate);
   };
   
-  // Always rebuild the database at 2:00 AM Central time
+  // If this is the first run when app starts, only schedule the next update
+  if (skipRebuildOnFirstRun) {
+    console.log('Scheduling next Instagram database update for 2:00 AM Central Time without immediate rebuild');
+    scheduleNextUpdate();
+    return;
+  }
+  
+  // This code only runs for the scheduled 2:00 AM update, not on initial app startup
   console.log('Starting daily rebuild of Instagram handle database...');
   
   // FORCE a rebuild instead of trying to load from file
@@ -532,13 +540,13 @@ console.log('Checking for existing Instagram handle database file...');
 if (loadInstagramHandleDatabase()) {
   console.log('Successfully loaded Instagram handle database from file. Skipping initial build.');
   
-  // Still schedule the nightly update check
-  updateInstagramHandleDatabase();
+  // Still schedule the nightly update check (but true flag ensures it won't rebuild now)
+  updateInstagramHandleDatabase(true);
 } else {
   console.log('No valid Instagram handle database file found or file is too old. Will build now...');
   buildInstagramHandleDatabase().then(() => {
-    // Schedule first update check for 2:00 AM
-    updateInstagramHandleDatabase();
+    // Schedule first update check for 2:00 AM (but true flag ensures it won't rebuild now)
+    updateInstagramHandleDatabase(true);
   });
 }
 
