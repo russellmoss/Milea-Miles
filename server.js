@@ -789,8 +789,8 @@ async function awardPointsForMention(instagramUsername, mentionCount = 1) {
                 data: {
                   type: "profile",
                   attributes: {
-                    email: customerEmail,
                     properties: {
+                      "$email": customerEmail,
                       "$first_name": customer.firstName || '',
                       "$last_name": customer.lastName || '',
                       "$phone_number": customer.phone || '',
@@ -809,9 +809,9 @@ async function awardPointsForMention(instagramUsername, mentionCount = 1) {
         const klaviyoResponse = await axios.post("https://a.klaviyo.com/api/events", klaviyoEvent, {
           headers: {
             "Authorization": `Klaviyo-API-Key ${KLAVIYO_PRIVATE_KEY}`,
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-            "revision": "2023-02-22"
+            "Accept": "application/vnd.api+json",
+            "Content-Type": "application/vnd.api+json",
+            "Revision": "2025-01-15"
           }
         });
         
