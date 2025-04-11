@@ -783,12 +783,7 @@ async function awardPointsForMention(instagramUsername, mentionCount = 1) {
                 "Reward Type": "Instagram Mention"
               },
               metric: {
-                data: {
-                  type: "metric",
-                  attributes: {
-                    name: "Instagram Mentions Points Awarded"
-                  }
-                }
+                name: "Instagram Mentions Points Awarded"
               },
               profile: {
                 data: {
