@@ -368,7 +368,7 @@ async function updateInstagramHandleDatabase(skipRebuildOnFirstRun = true) {
     // Create a date object for 2:00 AM Central Time
     // 7:00 AM UTC will be 2:00 AM Central time regardless of DST
     const targetTime = new Date();
-    targetTime.setUTCHours(17, 20, 0, 0);
+    targetTime.setUTCHours(7, 0, 0, 0);
     
     // If it's already past 2:00 AM Central time today, schedule for tomorrow
     if (now >= targetTime) {

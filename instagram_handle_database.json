@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2025-04-08T14:46:06.290Z",
+  "lastUpdated": "2025-04-11T17:32:51.697Z",
   "handles": [
     {
       "handle": "paul.zweifel.9",
@@ -11,12 +11,30 @@
       }
     },
     {
+      "handle": "@mossrussell667",
+      "customer": {
+        "id": "f5818fac-fcf1-4702-8168-846cea0c996c",
+        "email": "russell@mileafamilywines.com",
+        "fullHandle": "@mossrussell667",
+        "points": 5491
+      }
+    },
+    {
       "handle": "@mich0615",
       "customer": {
         "id": "e57ee1b3-216d-4027-a0fe-ee1a491a1c27",
         "email": "catchshark@aol.com",
         "fullHandle": "@mich0615",
         "points": 43990
+      }
+    },
+    {
+      "handle": "@hidden.hudson.valley",
+      "customer": {
+        "id": "9b9bfc4f-bf0d-4450-b825-dca2584d48b8",
+        "email": "bealel397@gmail.com",
+        "fullHandle": "@hidden.hudson.valley",
+        "points": 0
       }
     },
     {
@@ -43,7 +61,7 @@
         "id": "41a3c9a4-0d1e-46fa-8711-f90c61e6a810",
         "email": "lance@fillintheblank.co",
         "fullHandle": "@testinginstagram",
-        "points": 180
+        "points": 620
       }
     },
     {
