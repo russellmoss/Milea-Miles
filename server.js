@@ -73,7 +73,6 @@ const authLimiter = rateLimit({
 const PORT = process.env.PORT || 3001;
 const APP_ID = process.env.APP_ID;
 const SECRET_KEY = process.env.SECRET_KEY;
-const KLAVIYO_PUBLIC_KEY = process.env.KLAVIYO_PUBLIC_KEY;
 const TENANT_ID = process.env.TENANT_ID;
 const C7_API_BASE = 'https://api.commerce7.com/v1';
 const PROMOTION_ID = "a7623848-13ea-4b4e-9ae8-0f2799414f2c";
@@ -82,6 +81,7 @@ const INSTAGRAM_ACCESS_TOKEN = process.env.INSTAGRAM_ACCESS_TOKEN;
 const INSTAGRAM_BUSINESS_ID = process.env.INSTAGRAM_BUSINESS_ID;
 const WEBHOOK_VERIFY_TOKEN = process.env.WEBHOOK_VERIFY_TOKEN;
 const INSTAGRAM_APP_SECRET = process.env.INSTAGRAM_APP_SECRET;
+const KLAVIYO_PRIVATE_KEY = process.env.KLAVIYO_PRIVATE_KEY;
 
 // ---------------- Instagram Handle Database ----------------
 
@@ -762,47 +762,72 @@ async function awardPointsForMention(instagramUsername, mentionCount = 1) {
     
     console.log('Loyalty points awarded successfully:', loyaltyResponse.data.id);
 
-    // Send Klaviyo notification
-    const klaviyoEvent = {
-      data: {
-        type: "event",
-        attributes: {
-          properties: {
-            "Points Awarded": pointsToAward,
-            "Mentions Count": mentionCount,
-            "Instagram Handle": searchHandle,
-            "Total Points": (customer.loyalty?.points || 0) + pointsToAward
-          },
-          metric: {
-            data: {
-              type: "metric",
-              attributes: {
-                "name": "Instagram Mentions Points Awarded"
-              }
-            }
-          },
-          profile: {
-            data: {
-              type: "profile",
-              attributes: {
-                properties: {
-                  "$email": customer.emails[0]?.email
+    // Send Klaviyo notification if API key is configured
+    if (KLAVIYO_PRIVATE_KEY) {
+      try {
+        const customerEmail = customer.emails[0]?.email;
+        const customerName = `${customer.firstName || ''} ${customer.lastName || ''}`.trim();
+        const currentTotalPoints = (customer.loyalty?.points || 0) + pointsToAward;
+        
+        // Create Klaviyo event payload using the latest API format
+        const klaviyoEvent = {
+          data: {
+            type: "event",
+            attributes: {
+              properties: {
+                "Points Awarded": pointsToAward,
+                "Mentions Count": mentionCount,
+                "Instagram Handle": searchHandle,
+                "Current Total Points": currentTotalPoints,
+                "Customer Name": customerName,
+                "Reward Type": "Instagram Mention"
+              },
+              metric: {
+                data: {
+                  type: "metric",
+                  attributes: {
+                    name: "Instagram Mentions Points Awarded"
+                  }
+                }
+              },
+              profile: {
+                data: {
+                  type: "profile",
+                  attributes: {
+                    email: customerEmail,
+                    properties: {
+                      "$first_name": customer.firstName || '',
+                      "$last_name": customer.lastName || '',
+                      "$phone_number": customer.phone || '',
+                      "Instagram Handle": searchHandle,
+                      "Loyalty Points": currentTotalPoints
+                    }
+                  }
                 }
               }
             }
           }
-        }
-      }
-    };
+        };
 
-    await axios.post("https://a.klaviyo.com/api/events", klaviyoEvent, {
-      headers: {
-        "Authorization": `Klaviyo-API-Key ${process.env.KLAVIYO_PRIVATE_KEY}`,
-        "Accept": "application/vnd.api+json",
-        "Content-Type": "application/vnd.api+json",
-        "Revision": "2025-01-15"
+        // Send event to Klaviyo
+        console.log(`Sending Instagram points awarded event to Klaviyo for ${customerEmail}`);
+        const klaviyoResponse = await axios.post("https://a.klaviyo.com/api/events", klaviyoEvent, {
+          headers: {
+            "Authorization": `Klaviyo-API-Key ${KLAVIYO_PRIVATE_KEY}`,
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "revision": "2023-02-22"
+          }
+        });
+        
+        console.log('Successfully sent event to Klaviyo:', klaviyoResponse.status);
+      } catch (error) {
+        console.error('Error sending event to Klaviyo:', error.response?.data || error.message);
+        // Don't throw - we still want to continue even if Klaviyo notification fails
       }
-    });
+    } else {
+      console.log('Klaviyo API key not configured. Skipping email notification.');
+    }
 
     // Update customer's points in our database
     if (instagramHandleMap.has(searchHandle.toLowerCase())) {
@@ -812,8 +837,10 @@ async function awardPointsForMention(instagramUsername, mentionCount = 1) {
     }
 
     console.log(`Successfully awarded ${pointsToAward} points to ${customer.emails[0]?.email} for Instagram mentions`);
+    return { success: true, pointsAwarded: pointsToAward, email: customer.emails[0]?.email };
   } catch (error) {
     console.error('Error awarding points for mention:', error.response?.data || error.message);
+    return { success: false, error: error.message };
   }
 }
 
