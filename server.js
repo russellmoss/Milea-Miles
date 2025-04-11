@@ -404,8 +404,124 @@ async function updateInstagramHandleDatabase() {
   // Always rebuild the database at 2:00 AM Central time
   console.log('Starting daily rebuild of Instagram handle database...');
   
-  // Rebuild the whole database
-  await buildInstagramHandleDatabase();
+  // FORCE a rebuild instead of trying to load from file
+  console.log('Forcing a complete rebuild for the daily scheduled update');
+  isDatabaseBuilding = true;
+  databaseBuildStatus = {
+    lastStarted: new Date(),
+    currentProgress: "Building in progress - daily scheduled rebuild",
+    handlesFound: 0
+  };
+  
+  // Start a fresh rebuild without trying to load from file
+  const basicAuth = `Basic ${Buffer.from(`${APP_ID}:${SECRET_KEY}`).toString('base64')}`;
+  const batchSize = 50;
+  let page = 1;
+  let hasMore = true;
+  let totalProcessed = 0;
+  let customersWithInstagram = 0;
+  
+  try {
+    // Clear existing data
+    instagramHandleMap.clear();
+    
+    while (hasMore) {
+      // Continue with the existing rebuild logic
+      console.log(`Fetching customer batch ${page} (${batchSize} customers per batch)`);
+      databaseBuildStatus.currentProgress = `Processing batch ${page} (${totalProcessed} customers so far, ${customersWithInstagram} handles found)`;
+      
+      try {
+        const response = await axios.get(`${C7_API_BASE}/customer`, {
+          params: { 
+            limit: batchSize,
+            page: page,
+            sort: 'createdAt' // Sort by creation date to have a consistent ordering
+          },
+          headers: {
+            Authorization: basicAuth,
+            'Content-Type': 'application/json',
+            Tenant: TENANT_ID,
+          },
+        });
+        
+        const customers = response.data.customers || [];
+        totalProcessed += customers.length;
+        
+        // If we got fewer customers than the batch size, we're done
+        if (customers.length < batchSize) {
+          hasMore = false;
+        }
+        
+        console.log(`Processing ${customers.length} customers from batch ${page}`);
+        
+        // Store customers with Instagram handles in our map
+        for (const customer of customers) {
+          if (customer.metaData && customer.metaData.instagram_handle) {
+            const instagramHandle = customer.metaData.instagram_handle;
+            
+            // Store customer info in our map
+            instagramHandleMap.set(instagramHandle.toLowerCase(), {
+              id: customer.id,
+              email: customer.emails[0]?.email,
+              fullHandle: instagramHandle,
+              points: customer.loyalty?.points || 0
+            });
+            
+            customersWithInstagram++;
+          }
+        }
+        
+        databaseBuildStatus.handlesFound = customersWithInstagram;
+        
+        page++;
+        
+        // Save database to file after each batch to ensure we don't lose progress
+        if (page % 5 === 0 && customersWithInstagram > 0) {
+          lastDatabaseUpdateTime = new Date();
+          saveInstagramHandleDatabase();
+        }
+        
+        // Add rate limiting to avoid hitting Commerce7 API limits
+        // Wait 2 seconds between batches
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+      } catch (error) {
+        console.error(`Error fetching customer batch ${page}:`, error.message);
+        console.error(`Error details:`, error.response?.data || 'No additional details');
+        
+        databaseBuildStatus.currentProgress = `Error on batch ${page}: ${error.message}`;
+        
+        // Wait longer if we hit an error (possibly rate limiting)
+        await new Promise(resolve => setTimeout(resolve, 10000));
+        
+        // If we keep getting errors, eventually give up
+        if (page > 3 && totalProcessed === 0) {
+          hasMore = false;
+          databaseBuildStatus.currentProgress = "Failed after multiple attempts";
+          console.error('Unable to fetch customers after multiple attempts. Giving up.');
+        }
+      }
+    }
+    
+    lastDatabaseUpdateTime = new Date();
+    
+    // Save final database to file
+    saveInstagramHandleDatabase();
+    
+    databaseBuildStatus.currentProgress = "Complete";
+    
+    console.log(`Instagram handle database build complete! Processed ${totalProcessed} customers.`);
+    console.log(`Found ${customersWithInstagram} customers with Instagram handles.`);
+    if (customersWithInstagram > 0) {
+      console.log(`First 5 handles in database: ${[...instagramHandleMap.keys()].slice(0, 5).join(', ')}`);
+    }
+    
+  } catch (error) {
+    console.error('Error building Instagram handle database:', error);
+    databaseBuildStatus.currentProgress = `Failed with error: ${error.message}`;
+  } finally {
+    isDatabaseBuilding = false;
+  }
   
   // Schedule next update
   scheduleNextUpdate();
