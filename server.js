@@ -260,7 +260,6 @@ async function buildInstagramHandleDatabase() {
   
   try {
     while (hasMore) {
-      console.log(`Fetching customer batch ${page} (${batchSize} customers per batch)`);
       databaseBuildStatus.currentProgress = `Processing batch ${page} (${totalProcessed} customers so far, ${customersWithInstagram} handles found)`;
       
       try {
@@ -287,8 +286,6 @@ async function buildInstagramHandleDatabase() {
           hasMore = false;
         }
         
-        console.log(`Processing ${customers.length} customers from batch ${page}`);
-        
         // Store customers with Instagram handles in our map
         for (const customer of customers) {
           if (customer.metaData && customer.metaData.instagram_handle) {
@@ -313,7 +310,7 @@ async function buildInstagramHandleDatabase() {
         // Save database to file after each batch to ensure we don't lose progress
         if (page % 5 === 0 && customersWithInstagram > 0) {
           lastDatabaseUpdateTime = new Date();
-          saveInstagramHandleDatabase();
+          console.log(`Instagram handle database saved to file: ${INSTAGRAM_DB_FILE}`);
         }
         
         // Add rate limiting to avoid hitting Commerce7 API limits
@@ -382,20 +379,8 @@ async function updateInstagramHandleDatabase(skipRebuildOnFirstRun = true) {
     const hoursUntil = Math.floor(hoursUntilUpdate);
     const minutesUntil = Math.round((hoursUntilUpdate - hoursUntil) * 60);
     
-    // Convert to Central Time for display purposes
-    const targetCentral = new Date(targetTime);
-    // Get the actual timezone offset from the system
-    const offsetHours = now.getTimezoneOffset() / 60;
-    const centralTimezoneName = offsetHours === 5 ? "CDT" : "CST";
-    
     console.log(`Scheduled next Instagram database rebuild for ${targetTime.toUTCString()}`);
     console.log(`(Exactly ${hoursUntilUpdate.toFixed(2)} hours from now)`);
-    
-    // Log more details to debug time calculation with clearer timezone info
-    console.log(`Current UTC time: ${now.toUTCString()}`);
-    console.log(`Current server time: ${now.toString()}`);
-    console.log(`Target UTC time: ${targetTime.toUTCString()} (7:00 AM UTC)`);
-    console.log(`Target Central time: 2:00 AM Central ${centralTimezoneName} (${Math.abs(offsetHours)} hours behind UTC)`);
     console.log(`Time until rebuild: ${hoursUntil} hours and ${minutesUntil} minutes`);
     
     // Schedule the NEXT update with skipRebuildOnFirstRun = false to ensure it will rebuild
@@ -435,7 +420,6 @@ async function updateInstagramHandleDatabase(skipRebuildOnFirstRun = true) {
     
     while (hasMore) {
       // Continue with the existing rebuild logic
-      console.log(`Fetching customer batch ${page} (${batchSize} customers per batch)`);
       databaseBuildStatus.currentProgress = `Processing batch ${page} (${totalProcessed} customers so far, ${customersWithInstagram} handles found)`;
       
       try {
@@ -459,8 +443,6 @@ async function updateInstagramHandleDatabase(skipRebuildOnFirstRun = true) {
         if (customers.length < batchSize) {
           hasMore = false;
         }
-        
-        console.log(`Processing ${customers.length} customers from batch ${page}`);
         
         // Store customers with Instagram handles in our map
         for (const customer of customers) {
@@ -486,7 +468,7 @@ async function updateInstagramHandleDatabase(skipRebuildOnFirstRun = true) {
         // Save database to file after each batch to ensure we don't lose progress
         if (page % 5 === 0 && customersWithInstagram > 0) {
           lastDatabaseUpdateTime = new Date();
-          saveInstagramHandleDatabase();
+          console.log(`Instagram handle database saved to file: ${INSTAGRAM_DB_FILE}`);
         }
         
         // Add rate limiting to avoid hitting Commerce7 API limits
@@ -1657,19 +1639,18 @@ app.post('/webhook/instagram', async (req, res) => {
     console.log('Headers:', JSON.stringify(req.headers, null, 2));
     console.log('📦 Full payload body:', JSON.stringify(req.body, null, 2));
     
-    // Check if this is a test event or Facebook test button webhook
+    // Check if this is a test event
     const isTestEvent = req.query.test === 'true' || (req.body && req.body.test === true);
-    const isFacebookTestButton = req.headers['user-agent'] && req.headers['user-agent'].includes('Webhooks/1.0 (https://fb.me/webhooks)');
     
     // For non-test events, verify signature and exit if invalid
-    if (!isTestEvent && !isFacebookTestButton) {
+    if (!isTestEvent) {
       if (!verifyWebhookSignature(req)) {
         console.error('❌ Invalid webhook signature. Rejecting non-test event.');
         return; // Exit early - don't process events with invalid signatures
       }
       console.log('✅ Signature verified successfully. Processing real Instagram event.');
     } else {
-      console.log('🧪 Processing test event', isFacebookTestButton ? 'from Facebook test button' : '(bypassing signature verification)');
+      console.log('🧪 Processing test event (bypassing signature verification)');
     }
     
     const { entry } = req.body;
@@ -1686,35 +1667,18 @@ app.post('/webhook/instagram', async (req, res) => {
         
         console.log(`📣 Received Instagram ${field} webhook with data:`, JSON.stringify(value, null, 2));
         
-        // If this is a Facebook test button webhook, let's use a test username
-        // since Facebook's test payloads don't include username information
-        const testUsername = 'testinginstagram';
-        
         // Common function to process mentions
         const processMention = (text, username, mentionType) => {
-          // For Facebook test button webhook, use our test username if none provided
-          if (isFacebookTestButton && !username) {
-            username = testUsername;
-            console.log(`🧪 Using test username "${username}" for Facebook test button webhook`);
-          }
-
           // Enhanced logging for debugging mention detection
           console.log(`🔎 Checking for mentions in ${mentionType}...`);
           console.log(`Text: "${text}", Username: ${username}`);
           
-          // Special case for Facebook test button webhooks - always process them as if they contained a mention
-          if (isFacebookTestButton && username) {
-            console.log(`✨ Processing test webhook as a mention from ${username}`);
-            try {
-              // Award points for the mention
-              awardPointsForMention(username);
-            } catch (error) {
-              console.error(`❌ Error awarding points: ${error.message}`);
-            }
-            return;
-          }
-          
-          if (text && username && text.includes('@mileaestatewinery')) {
+          // Only process if we have text, username, and text mentions our account
+          // AND the username is not our own account (don't award points to ourselves)
+          if (text && 
+              username && 
+              text.includes('@mileaestatewinery') && 
+              username.toLowerCase() !== 'mileaestatewinery') {
             console.log(`✨ Found @mileaestatewinery mention in ${mentionType} from ${username}`);
             
             try {
@@ -1728,6 +1692,7 @@ app.post('/webhook/instagram', async (req, res) => {
             if (!text) console.log(`⚠️ No text content in ${mentionType}`);
             if (!username) console.log(`⚠️ No username found in ${mentionType}`);
             if (text && !text.includes('@mileaestatewinery')) console.log(`⚠️ No mention of @mileaestatewinery in ${mentionType} text`);
+            if (username && username.toLowerCase() === 'mileaestatewinery') console.log(`⚠️ Skipping our own account's ${mentionType}`);
           }
         };
         
@@ -1741,13 +1706,6 @@ app.post('/webhook/instagram', async (req, res) => {
             const commentText = value.text || value.caption || value.message || '';
             const commentUser = value.from?.username || value.username;
             
-            // Handle Facebook test button webhook for comments
-            if (isFacebookTestButton) {
-              console.log(`🧪 Processing Facebook test button webhook for comment`);
-              awardPointsForMention(testUsername);
-              break;
-            }
-            
             processMention(commentText, commentUser, 'comment');
             break;
             
@@ -1756,39 +1714,23 @@ app.post('/webhook/instagram', async (req, res) => {
             console.log('👉 Processing a direct mention webhook');
             const mentionUser = value.username || value.from?.username;
             
-            // Handle Facebook test button webhook for mentions
-            if (isFacebookTestButton) {
-              console.log(`🧪 Processing Facebook test button webhook for direct mention`);
-              awardPointsForMention(testUsername);
-              break;
-            }
-            
-            // For mentions, we don't need to check the text since being mentioned is the trigger
-            if (mentionUser) {
+            // For mentions, we need to check that the username isn't our own account
+            if (mentionUser && mentionUser.toLowerCase() !== 'mileaestatewinery') {
               console.log(`💬 Processing direct mention from ${mentionUser}`);
               try {
                 awardPointsForMention(mentionUser);
               } catch (error) {
                 console.error(`❌ Error awarding points: ${error.message}`);
               }
+            } else if (mentionUser && mentionUser.toLowerCase() === 'mileaestatewinery') {
+              console.log(`⚠️ Skipping our own account's mention`);
             }
             break;
             
           case 'story_insights':
             // Process story mentions with enhanced logging
             console.log('👉 Processing a story insights webhook');
-            
-            // Handle Facebook test button webhook for story_insights
-            if (isFacebookTestButton) {
-              console.log(`🧪 Processing Facebook test button webhook for story insights`);
-              awardPointsForMention(testUsername);
-              break;
-            }
-            
-            // Since story_insights doesn't include username directly, we need to fetch it
-            // For now, we'll log that we need additional processing
             console.log('⚠️ Story insights webhooks require additional processing to determine the username');
-            console.log('⚠️ Would need to query Instagram API with the media_id to get the username');
             break;
             
           case 'stories':
@@ -1797,22 +1739,15 @@ app.post('/webhook/instagram', async (req, res) => {
             const storyUser = value.username || value.from?.username;
             const storyText = value.caption || value.text || '';
             
-            // Handle Facebook test button webhook for stories
-            if (isFacebookTestButton) {
-              console.log(`🧪 Processing Facebook test button webhook for story`);
-              awardPointsForMention(testUsername);
-              break;
-            }
-            
             // For stories, we might need to look at mentions array as well
             if (value.mentions && Array.isArray(value.mentions)) {
               console.log('📚 Story contains mentions array with:', value.mentions.length, 'mentions');
               
-              // Check if our account is mentioned in the mentions array
+              // Check if our account is mentioned in the mentions array and the story isn't from our own account
               const mentionsUs = value.mentions.some(mention => 
                 mention.username && mention.username.toLowerCase() === 'mileaestatewinery');
               
-              if (mentionsUs && storyUser) {
+              if (mentionsUs && storyUser && storyUser.toLowerCase() !== 'mileaestatewinery') {
                 console.log(`🎯 Our account found in story mentions array from ${storyUser}`);
                 awardPointsForMention(storyUser);
                 break; // Exit after processing to avoid double points
@@ -1829,13 +1764,6 @@ app.post('/webhook/instagram', async (req, res) => {
             const mediaUser = value.username || value.from?.username;
             const mediaText = value.caption || value.text || '';
             
-            // Handle Facebook test button webhook for media
-            if (isFacebookTestButton) {
-              console.log(`🧪 Processing Facebook test button webhook for media post`);
-              awardPointsForMention(testUsername);
-              break;
-            }
-            
             // For posts, we might need to look at mentions array as well
             if (value.mentions && Array.isArray(value.mentions)) {
               console.log('📚 Post contains mentions array with:', value.mentions.length, 'mentions');
@@ -1844,7 +1772,7 @@ app.post('/webhook/instagram', async (req, res) => {
               const mentionsUs = value.mentions.some(mention => 
                 mention.username && mention.username.toLowerCase() === 'mileaestatewinery');
               
-              if (mentionsUs && mediaUser) {
+              if (mentionsUs && mediaUser && mediaUser.toLowerCase() !== 'mileaestatewinery') {
                 console.log(`🎯 Our account found in post mentions array from ${mediaUser}`);
                 awardPointsForMention(mediaUser);
                 break; // Exit after processing to avoid double points
@@ -1859,29 +1787,6 @@ app.post('/webhook/instagram', async (req, res) => {
             console.log(`⚠️ Unhandled webhook field type: ${field}`);
             // Enhanced logging for unknown field types to help us understand what we received
             console.log('📄 Full webhook value structure:', JSON.stringify(value, null, 2));
-            
-            // Handle Facebook test button webhook for unhandled types
-            if (isFacebookTestButton) {
-              console.log(`🧪 Processing Facebook test button webhook for unhandled field type: ${field}`);
-              awardPointsForMention(testUsername);
-              break;
-            }
-            
-            // Try to detect any mention-like patterns in unknown webhook types
-            if (value) {
-              // Look for common fields that might contain usernames
-              const possibleUsername = value.username || value.from?.username || 
-                                      value.user?.username || value.actor?.username;
-              
-              // Look for common fields that might contain text
-              const possibleText = value.text || value.caption || value.message || 
-                                  value.content || value.description;
-              
-              if (possibleUsername && possibleText && possibleText.includes('@mileaestatewinery')) {
-                console.log(`💡 Found potential mention in unhandled webhook type from: ${possibleUsername}`);
-                awardPointsForMention(possibleUsername);
-              }
-            }
         }
       } else if (item.messaging_product === 'instagram' && item.object === 'instagram_business_account') {
         // Handle Instagram business account events
